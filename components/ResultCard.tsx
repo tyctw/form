@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import QRCode from 'react-qr-code';
 import { InvitationResult } from '../types';
-import { ClipboardCopy, CheckCheck, QrCode, X, Clock, ArrowRight, Sparkles } from './Icons';
+import { ClipboardCopy, CheckCheck, QrCode, X, Clock, ArrowRight, Sparkles, Download } from './Icons';
 
 interface ResultCardProps {
   result: InvitationResult;
@@ -12,11 +12,51 @@ export const ResultCard: React.FC<ResultCardProps> = ({ result, onReset }) => {
   const [copied, setCopied] = useState(false);
   const [showQr, setShowQr] = useState(false);
   const [timeLeft, setTimeLeft] = useState("");
+  const qrRef = useRef<HTMLDivElement>(null);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(result.code);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleDownloadQr = () => {
+    const svg = qrRef.current?.querySelector("svg");
+    if (!svg) return;
+
+    // Serialize SVG to string
+    const svgData = new XMLSerializer().serializeToString(svg);
+    
+    // Create canvas
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+    const img = new Image();
+
+    // High resolution for download
+    const size = 1000;
+    canvas.width = size;
+    canvas.height = size;
+
+    img.onload = () => {
+      if (ctx) {
+        // Draw white background
+        ctx.fillStyle = "white";
+        ctx.fillRect(0, 0, size, size);
+        
+        // Draw image
+        ctx.drawImage(img, 0, 0, size, size);
+        
+        // Convert to PNG and download
+        const pngFile = canvas.toDataURL("image/png");
+        const downloadLink = document.createElement("a");
+        downloadLink.download = `TW_InviteCode_${result.code}.png`;
+        downloadLink.href = pngFile;
+        downloadLink.click();
+      }
+    };
+
+    // Load SVG data into image
+    img.src = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svgData)));
   };
 
   useEffect(() => {
@@ -144,9 +184,20 @@ export const ResultCard: React.FC<ResultCardProps> = ({ result, onReset }) => {
                <X className="w-5 h-5" />
              </button>
              <h3 className="text-xl font-black text-slate-800 mb-6">邀請碼 QR Code</h3>
-             <div className="bg-white p-4 rounded-2xl shadow-inner border border-slate-100 inline-block mb-4">
+             
+             {/* QR Container with Ref */}
+             <div ref={qrRef} className="bg-white p-4 rounded-2xl shadow-inner border border-slate-100 inline-block mb-4">
                 <QRCode value={result.code} size={200} level="H" fgColor="#4c1d95" style={{ height: "auto", maxWidth: "100%", width: "100%" }} viewBox={`0 0 256 256`}/>
              </div>
+
+             <button 
+                onClick={handleDownloadQr}
+                className="w-full py-2.5 mb-4 rounded-xl font-bold text-sm bg-slate-100 text-slate-600 hover:bg-violet-100 hover:text-violet-700 transition-all flex items-center justify-center gap-2"
+             >
+                <Download className="w-4 h-4" />
+                下載 QR Code
+             </button>
+
              <p className="font-mono font-bold text-2xl text-violet-700 tracking-wider mb-2">{result.code}</p>
              <p className="text-xs text-rose-500 font-bold animate-pulse">剩餘時間: {timeLeft}</p>
           </div>
