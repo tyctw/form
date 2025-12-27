@@ -24,14 +24,16 @@ const logError = (action: string, error: any) => {
 
 /**
  * Fetches the invitation code from the Google Apps Script backend.
+ * STRICT MODE: If backend fails, throws error immediately to show backup link.
  */
 export const fetchInviteCode = async (data: UserFormData): Promise<string> => {
   logAction('Starting invitation code generation...', { email: data.email, region: data.region });
 
-  if (GAS_API_URL.includes("YOUR_GOOGLE_SCRIPT_WEB_APP_URL")) {
-    console.warn("GAS_API_URL is not set. Using fallback local generation.");
-    logAction('Using local fallback code generation');
-    return generateLocalFallbackCode();
+  // 1. Check if API URL is configured
+  if (!GAS_API_URL || GAS_API_URL.includes("YOUR_GOOGLE_SCRIPT_WEB_APP_URL")) {
+    const errorMsg = "System Error: Backend API URL is not configured.";
+    logError('fetchInviteCode', errorMsg);
+    throw new Error(errorMsg);
   }
 
   try {
@@ -56,10 +58,18 @@ export const fetchInviteCode = async (data: UserFormData): Promise<string> => {
     }
 
     logAction('Sending request to GAS...');
+    
+    // Add a timeout to prevent infinite loading
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 seconds timeout
+
     const response = await fetch(`${GAS_API_URL}?${params.toString()}`, {
       method: 'GET',
       mode: 'cors',
+      signal: controller.signal
     });
+
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
@@ -68,15 +78,20 @@ export const fetchInviteCode = async (data: UserFormData): Promise<string> => {
     const result = await response.json();
     logAction('Received response from GAS', result);
     
+    // Check for success and valid code
     if (result && result.invitationCode) {
       logAction('Code generated successfully', result.invitationCode);
       return result.invitationCode;
+    } else if (result && result.error) {
+      throw new Error(result.error);
     } else {
-      throw new Error("Invalid response format from server");
+      throw new Error("Invalid response format: Missing invitationCode");
     }
+
   } catch (error) {
     logError('fetchInviteCode', error);
-    return generateLocalFallbackCode();
+    // Crucial: Throw error to trigger SystemErrorModal in App.tsx
+    throw error;
   }
 };
 
@@ -235,19 +250,29 @@ export const updateSystemConfig = async (config: SystemConfig, password: string)
     }
 };
 
-/**
- * Fallback local generator
- */
-const generateLocalFallbackCode = (): string => {
-  const now = new Date();
-  const year = now.getFullYear().toString();
-  const month = ("0" + (now.getMonth() + 1)).slice(-2);
-  const day = ("0" + now.getDate()).slice(-2);
-  const hour = ("0" + now.getHours()).slice(-2);
-  return "TW" + year + month + day + hour;
+export const getFormattedDate = (): string => {
+  return new Date().toLocaleString('zh-TW', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
 };
 
-// Mock data generator for fallback
+export const getExpirationTime = (): string => {
+  const now = new Date();
+  const endOfHour = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours(), 59, 59);
+  return endOfHour.toLocaleString('zh-TW', { hour: '2-digit', minute: '2-digit' });
+};
+
+export const getExpirationTimestamp = (): number => {
+  const now = new Date();
+  const endOfHour = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours(), 59, 59);
+  return endOfHour.getTime();
+};
+
+// Mock data generator for fallback (Only for Admin Panel Mocking)
 const generateMockAdminData = (): AdminRecord[] => {
     const pick = (arr: any[]) => arr[Math.floor(Math.random() * arr.length)];
     const regions = ["基北區", "桃連區", "中投區", "竹苗區", "高雄區"];
@@ -279,26 +304,4 @@ const generateMockAdminData = (): AdminRecord[] => {
         } : undefined
       };
     }).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-};
-
-export const getFormattedDate = (): string => {
-  return new Date().toLocaleString('zh-TW', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  });
-};
-
-export const getExpirationTime = (): string => {
-  const now = new Date();
-  const endOfHour = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours(), 59, 59);
-  return endOfHour.toLocaleString('zh-TW', { hour: '2-digit', minute: '2-digit' });
-};
-
-export const getExpirationTimestamp = (): number => {
-  const now = new Date();
-  const endOfHour = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours(), 59, 59);
-  return endOfHour.getTime();
 };
