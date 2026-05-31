@@ -22,7 +22,9 @@ import {
   Ticket,
   Info,
   Share2,
-  QrCode
+  QrCode,
+  ChevronDown,
+  MapPin
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { QuestionnaireData, SubjectScore, EssayScoreType } from './types';
@@ -80,6 +82,7 @@ export default function App() {
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
+  const [showRegionModal, setShowRegionModal] = useState(false);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
 
   const isBeforeAnnouncement = new Date() < new Date('2026-06-16T12:00:00+08:00');
@@ -416,16 +419,16 @@ export default function App() {
                   <label htmlFor="region" className="text-[11px] font-bold uppercase text-slate-400 flex items-center mb-1">
                     <Building2 className="w-4 h-4 mr-1.5 text-slate-400" /> 招生區域 <span className="text-slate-900 ml-1">*</span>
                   </label>
-                  <select
-                    id="region"
-                    name="region"
-                    value={formData.region}
-                    onChange={handleChange}
-                    className="geo-input"
+                  <button
+                    type="button"
+                    onClick={() => setShowRegionModal(true)}
+                    className="geo-input w-full text-left bg-white flex justify-between items-center"
                   >
-                    <option value="" disabled>請選擇招生區</option>
-                    {REGIONS.map(r => <option key={r} value={r}>{r}</option>)}
-                  </select>
+                    <span className={formData.region ? 'text-slate-900 font-bold' : 'text-slate-500'}>
+                      {formData.region || '請選擇招生區'}
+                    </span>
+                    <ChevronDown className="w-5 h-5 text-slate-500" />
+                  </button>
                 </div>
 
                 <div>
@@ -1008,6 +1011,49 @@ export default function App() {
                 <span className="flex items-center text-slate-900"><Copy className="w-5 h-5 mr-2" /> 複製系統連結</span>
               )}
             </button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* 招生區彈窗 */}
+    {showRegionModal && (
+      <div className="fixed inset-0 bg-slate-900/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+        <div className="bg-white border-4 border-slate-900 shadow-[8px_8px_0_#0F172A] p-6 sm:p-8 max-w-md w-full animate-in fade-in zoom-in duration-200 flex flex-col max-h-[85vh]">
+          <div className="flex justify-between items-center mb-6 pb-4 border-b-2 border-slate-100 shrink-0">
+            <h3 className="text-2xl font-extrabold flex items-center text-slate-900">
+              <MapPin className="w-6 h-6 mr-3 text-slate-900" />
+              選擇招生區域
+            </h3>
+            <button 
+              onClick={() => setShowRegionModal(false)}
+              className="p-2 hover:bg-slate-100 transition-colors border-2 border-transparent hover:border-slate-900 geometric-card !border-slate-900 !shadow-[2px_2px_0_#0F172A] active:!translate-y-0.5 active:!shadow-none"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+          
+          <div className="overflow-y-auto overflow-x-hidden flex-1 scrollbar-hide -mx-2 px-2 pb-2">
+            <div className="grid grid-cols-2 gap-3 pb-2">
+              {REGIONS.map(r => (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => {
+                    setFormData(prev => ({ ...prev, region: r }));
+                    setShowRegionModal(false);
+                  }}
+                  className={`py-3 px-4 text-left font-bold transition-all border-2 geometric-card active:translate-y-0.5 active:shadow-[1px_1px_0_#0F172A] flex items-center justify-between group ${
+                    formData.region === r 
+                      ? 'bg-slate-900 text-white border-slate-900 shadow-[3px_3px_0_#0F172A]' 
+                      : 'bg-white text-slate-700 border-slate-200 hover:border-slate-900 shadow-[3px_3px_0_transparent] hover:shadow-[3px_3px_0_#0F172A] hover:text-slate-900'
+                  }`}
+                >
+                  <span className="truncate">{r}</span>
+                  {formData.region === r && <CheckCircle2 className="w-4 h-4 ml-2 shrink-0" />}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </div>
