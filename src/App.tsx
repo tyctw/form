@@ -24,18 +24,21 @@ import {
   Share2,
   QrCode,
   ChevronDown,
-  MapPin
+  MapPin,
+  User,
+  Users
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { QuestionnaireData, SubjectScore, EssayScoreType } from './types';
 
 // Constants for dropdowns
 const REGIONS = [
-  "基北區", "桃聯區", "竹苗區", "中投區", "彰化區", 
+  "基北區", "桃園區", "竹苗區", "中投區", "彰化區", 
   "雲林區", "嘉義區", "台南區", "高雄區", "屏東區", 
   "宜蘭區", "花蓮區", "台東區", "澎湖區", "金門區", "其他"
 ];
 const EXAM_YEARS = ["115", "114", "113", "112", "111", "110"];
+const IDENTITIES = ["學生", "家長", "老師", "補教業"];
 const SCORES: SubjectScore[] = ['A++', 'A+', 'A', 'B++', 'B+', 'B', 'C'];
 const ESSAY_SCORES: EssayScoreType[] = ['6', '5', '4', '3', '2', '1', '0'];
 
@@ -58,6 +61,7 @@ function calculateExpirationTime() {
 const initialData: QuestionnaireData = {
   region: '',
   examYear: '115',
+  identity: '',
   chineseScore: '',
   mathScore: '',
   englishScore: '',
@@ -128,6 +132,7 @@ export default function App() {
     const errors: string[] = [];
     if (!formData.region) errors.push('招生區');
     if (!formData.examYear) errors.push('會考年度');
+    if (!formData.identity) errors.push('分析身分');
     if (!formData.chineseScore) errors.push('國文成績');
     if (!formData.mathScore) errors.push('數學成績');
     if (!formData.englishScore) errors.push('英文成績');
@@ -500,6 +505,31 @@ export default function App() {
                   </select>
                 </div>
               </div>
+
+              <div className="mt-6">
+                <label className="text-[11px] font-bold uppercase text-slate-400 flex items-center mb-2">
+                  <span className="w-4 h-4 mr-1.5 flex items-center justify-center font-black">
+                    <User className="w-4 h-4 text-slate-400" />
+                  </span>
+                  分析身分 <span className="text-slate-900 ml-1">*</span>
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {IDENTITIES.map(identity => (
+                    <button
+                      key={identity}
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, identity }))}
+                      className={`py-3 px-2 font-bold transition-all border-2 geometric-card active:translate-y-0.5 active:shadow-none flex items-center justify-center ${
+                        formData.identity === identity
+                          ? 'bg-slate-900 text-white border-slate-900 shadow-[3px_3px_0_#0F172A]' 
+                          : 'bg-white text-slate-700 border-slate-200 hover:border-slate-900 shadow-[2px_2px_0_transparent] hover:shadow-[3px_3px_0_#0F172A]'
+                      }`}
+                    >
+                      {identity}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </section>
 
             {/* 各科成績 */}
@@ -820,6 +850,10 @@ export default function App() {
             <div className="grid grid-cols-2 gap-2 text-sm border-b-2 border-slate-100 pb-2">
               <span className="text-slate-500 font-bold">會考年度</span>
               <span className="font-bold text-slate-900 text-right">{formData.examYear}年度</span>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-sm border-b-2 border-slate-100 pb-2">
+              <span className="text-slate-500 font-bold">分析身分</span>
+              <span className="font-bold text-slate-900 text-right">{formData.identity}</span>
             </div>
             <div className="flex flex-col gap-1 border-b-2 border-slate-100 pb-2">
               <span className="text-slate-500 font-bold text-sm">各科成績</span>
