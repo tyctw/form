@@ -13,6 +13,7 @@ export interface QuestionnaireData {
   maxRankInterval: string;
   email: string;
   skipRanking: boolean;
+  identity: string;
 }
 
 export type SubjectScore = 'A++' | 'A+' | 'A' | 'B++' | 'B+' | 'B' | 'C' | '';
