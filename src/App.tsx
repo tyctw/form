@@ -33,7 +33,7 @@ import { QuestionnaireData, SubjectScore, EssayScoreType } from './types';
 
 // Constants for dropdowns
 const REGIONS = [
-  "基北區", "桃園區", "竹苗區", "中投區", "彰化區", 
+  "基北區", "桃聯區", "竹苗區", "中投區", "彰化區", 
   "雲林區", "嘉義區", "台南區", "高雄區", "屏東區", 
   "宜蘭區", "花蓮區", "台東區", "澎湖區", "金門區", "其他"
 ];
