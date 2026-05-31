@@ -1,0 +1,6 @@
+{
+  "name": "會考落點分析邀請問卷",
+  "description": "填寫會考序位成績問卷，回傳後自動取得落點分析邀請碼與專屬連結",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
