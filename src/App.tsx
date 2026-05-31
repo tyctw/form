@@ -352,6 +352,58 @@ export default function App() {
             </div>
           </div>
         </div>
+
+        {/* 分享系統彈窗 */}
+        {showShareModal && (
+          <div className="fixed inset-0 bg-slate-900/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+            <div className="bg-white border-4 border-slate-900 shadow-[8px_8px_0_#0F172A] p-6 sm:p-8 max-w-sm w-full animate-in fade-in zoom-in duration-200">
+              <div className="flex justify-between items-center mb-6 pb-4 border-b-2 border-slate-100">
+                <h3 className="text-2xl font-extrabold flex items-center text-slate-900">
+                  <Share2 className="w-6 h-6 mr-3 text-slate-900" />
+                  分享系統
+                </h3>
+                <button 
+                  onClick={() => setShowShareModal(false)}
+                  className="p-2 hover:bg-slate-100 transition-colors border-2 border-transparent hover:border-slate-900 geometric-card !border-slate-900 !shadow-[2px_2px_0_#0F172A] active:!translate-y-0.5 active:!shadow-none"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              
+              <div className="flex flex-col items-center justify-center space-y-6">
+                <p className="text-slate-600 font-medium text-sm text-center">
+                  掃描下方 QR Code 或複製連結，分享「全國會考分析系統」給需要的朋友與同學。
+                </p>
+                
+                <div className="p-4 bg-white border-4 border-slate-900 shadow-[4px_4px_0_#0F172A]">
+                  <QRCodeSVG 
+                    value={window.location.href} 
+                    size={200}
+                    bgColor={"#ffffff"}
+                    fgColor={"#0f172a"}
+                    level={"H"}
+                    includeMargin={false}
+                  />
+                </div>
+                
+                <button 
+                  onClick={() => {
+                    navigator.clipboard.writeText(window.location.href);
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                  }}
+                  className="w-full group flex items-center justify-center py-3 px-4 bg-slate-50 text-slate-900 font-bold text-sm hover:bg-slate-100 transition-all border-2 border-slate-900 shadow-[4px_4px_0_#0F172A] active:translate-y-1 active:shadow-none"
+                >
+                  {copied ? (
+                    <span className="flex items-center text-emerald-600"><CheckCircle2 className="w-5 h-5 mr-2" /> 已複製連結</span>
+                  ) : (
+                    <span className="flex items-center text-slate-900"><Copy className="w-5 h-5 mr-2" /> 複製系統連結</span>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </>
     );
   }
