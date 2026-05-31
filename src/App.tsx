@@ -165,6 +165,11 @@ export default function App() {
     setIsSubmitting(true);
     try {
       const gasUrl = import.meta.env.VITE_GAS_WEB_APP_URL;
+
+      if (!gasUrl) {
+        throw new Error("尚未設定系統連線 (未配置後端網址)，請聯絡管理員。");
+      }
+
       const payload = {
         ...formData,
         skipRanking: effectiveSkipRanking,
@@ -173,60 +178,54 @@ export default function App() {
       
       let serverInviteCode = '';
 
-      if (gasUrl) {
-        // Retry logic for high concurrency stability
-        let retries = 3;
-        let success = false;
-        let lastError = null;
+      // Retry logic for high concurrency stability
+      let retries = 3;
+      let success = false;
+      let lastError = null;
 
-        while (retries > 0 && !success) {
+      while (retries > 0 && !success) {
+        try {
+          const response = await fetch(gasUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'text/plain',
+            },
+            body: JSON.stringify(payload)
+          });
+          
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          
+          // Handle JSON response
+          const responseText = await response.text();
+          let result;
           try {
-            const response = await fetch(gasUrl, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'text/plain',
-              },
-              body: JSON.stringify(payload)
-            });
-            
-            if (!response.ok) {
-              throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            
-            // Handle JSON response
-            const responseText = await response.text();
-            let result;
-            try {
-              result = JSON.parse(responseText);
-            } catch(e) {
-               // Ignore non-json parsing error that sometimes happens with google scripts
-            }
-            if (result && result.status === 'error') {
-              throw new Error(result.message);
-            }
-            
-            if (result && result.inviteCode) {
-              serverInviteCode = result.inviteCode;
-            }
-            
-            success = true;
-          } catch (err) {
-            lastError = err;
-            retries--;
-            if (retries > 0) {
-              // Exponential backoff
-              await new Promise(r => setTimeout(r, (3 - retries) * 1000));
-            }
+            result = JSON.parse(responseText);
+          } catch(e) {
+             // Ignore non-json parsing error that sometimes happens with google scripts
+          }
+          if (result && result.status === 'error') {
+            throw new Error(result.message);
+          }
+          
+          if (result && result.inviteCode) {
+            serverInviteCode = result.inviteCode;
+          }
+          
+          success = true;
+        } catch (err) {
+          lastError = err;
+          retries--;
+          if (retries > 0) {
+            // Exponential backoff
+            await new Promise(r => setTimeout(r, (3 - retries) * 1000));
           }
         }
+      }
 
-        if (!success) {
-          throw lastError;
-        }
-      } else {
-        // Mock delay for preview if URL is not configured
-        console.warn("VITE_GAS_WEB_APP_URL is not configured. Simulating success.");
-        await new Promise(r => setTimeout(r, 1000));
+      if (!success) {
+        throw lastError;
       }
 
       setInviteResult({
@@ -237,7 +236,10 @@ export default function App() {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (error) {
       console.error("Submission failed:", error);
-      alert("伺服器繁忙，多次提交失敗，請稍後再試。");
+      const errorMessage = error instanceof Error && error.message.includes("尚未設定系統連線") 
+        ? error.message 
+        : "伺服器繁忙，多次提交失敗，請稍後再試。";
+      alert(errorMessage);
     } finally {
       setIsSubmitting(false);
     }
