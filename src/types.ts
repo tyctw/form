@@ -1,3 +1,21 @@
+export interface CustomQuestion {
+  id: string;
+  type: 'text' | 'radio' | 'checkbox';
+  question: string;
+  options?: string[];
+  required: boolean;
+  startTime?: string;
+  endTime?: string;
+}
+
+export interface AppConfig {
+  announcementDate: string;
+  customQuestions: CustomQuestion[];
+  subjectScoreStartTime?: string;
+  subjectScoreEndTime?: string;
+  subjectScoreEnabled?: boolean;
+}
+
 export interface QuestionnaireData {
   region: string;
   examYear: string;
@@ -14,6 +32,7 @@ export interface QuestionnaireData {
   email: string;
   skipRanking: boolean;
   identity: string;
+  customAnswers: Record<string, any>;
 }
 
 export type SubjectScore = 'A++' | 'A+' | 'A' | 'B++' | 'B+' | 'B' | 'C' | '';
