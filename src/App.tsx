@@ -5,7 +5,7 @@ import Admin from './pages/Admin';
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter basename="/form">
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/admin" element={<Admin />} />
