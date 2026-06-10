@@ -674,54 +674,58 @@ export default function Home() {
                 
                 <div className="space-y-6">
                   {activeCustomQuestions.map(q => (
-                    <div key={q.id} className="bg-slate-50 border-2 border-slate-200 p-4 sm:p-5">
-                      <label className="text-sm font-bold text-slate-900 flex items-center mb-3">
-                        {q.question} {q.required && <span className="text-rose-500 ml-1">*</span>}
-                      </label>
-                      
-                      {q.type === 'text' && (
-                        <input 
-                          type="text" 
-                          value={formData.customAnswers[q.id] || ''} 
-                          onChange={(e) => handleCustomAnswerChange(q.id, e.target.value, 'text')}
-                          className="w-full border-2 border-slate-300 p-2 focus:border-slate-900 focus:outline-none"
-                          placeholder="請輸入"
-                        />
-                      )}
-                      
-                      {q.type === 'radio' && q.options && (
-                        <div className="flex flex-col space-y-2">
-                          {q.options.map((opt, i) => (
-                            <label key={i} className="flex items-center cursor-pointer">
-                              <input 
-                                type="radio" 
-                                name={q.id} 
-                                value={opt}
-                                checked={formData.customAnswers[q.id] === opt}
-                                onChange={(e) => handleCustomAnswerChange(q.id, e.target.value, 'radio')}
-                                className="w-4 h-4 accent-slate-900"
-                              />
-                              <span className="ml-2 font-medium text-slate-700">{opt}</span>
-                            </label>
-                          ))}
-                        </div>
-                      )}
+                    <div key={q.id} className="relative group">
+                      <div className="absolute inset-0 bg-emerald-400 translate-x-1.5 translate-y-1.5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none border-2 border-slate-900"></div>
+                      <div className="bg-white border-2 border-slate-900 p-5 sm:p-6 relative z-10 hover:-translate-y-0.5 hover:-translate-x-0.5 transition-transform duration-200">
+                        <label className="text-base font-black text-slate-900 flex items-center mb-4 tracking-wide">
+                          <span className="w-2 h-4 bg-emerald-400 mr-2 inline-block"></span>
+                          {q.question} {q.required && <span className="text-rose-500 ml-1 pb-1">*</span>}
+                        </label>
+                        
+                        {q.type === 'text' && (
+                          <input 
+                            type="text" 
+                            value={formData.customAnswers[q.id] || ''} 
+                            onChange={(e) => handleCustomAnswerChange(q.id, e.target.value, 'text')}
+                            className="w-full border-2 border-slate-300 p-3 font-bold focus:border-slate-900 focus:outline-none focus:shadow-[4px_4px_0_#0F172A] transition-all bg-slate-50 focus:bg-white"
+                            placeholder="請輸入您的回答..."
+                          />
+                        )}
+                        
+                        {q.type === 'radio' && q.options && (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {q.options.map((opt, i) => (
+                              <label key={i} className={`flex items-center p-3 border-2 cursor-pointer transition-all ${formData.customAnswers[q.id] === opt ? 'border-slate-900 bg-emerald-50 shadow-[2px_2px_0_#0F172A]' : 'border-slate-200 hover:border-slate-400 bg-white'}`}>
+                                <input 
+                                  type="radio" 
+                                  name={q.id} 
+                                  value={opt}
+                                  checked={formData.customAnswers[q.id] === opt}
+                                  onChange={(e) => handleCustomAnswerChange(q.id, e.target.value, 'radio')}
+                                  className="w-4 h-4 text-slate-900 accent-slate-900"
+                                />
+                                <span className="ml-3 font-bold text-slate-700">{opt}</span>
+                              </label>
+                            ))}
+                          </div>
+                        )}
 
-                      {q.type === 'checkbox' && q.options && (
-                        <div className="flex flex-col space-y-2">
-                          {q.options.map((opt, i) => (
-                            <label key={i} className="flex items-center cursor-pointer">
-                              <input 
-                                type="checkbox" 
-                                checked={(formData.customAnswers[q.id] || []).includes(opt)}
-                                onChange={() => handleCustomAnswerChange(q.id, opt, 'checkbox')}
-                                className="w-4 h-4 accent-slate-900"
-                              />
-                              <span className="ml-2 font-medium text-slate-700">{opt}</span>
-                            </label>
-                          ))}
-                        </div>
-                      )}
+                        {q.type === 'checkbox' && q.options && (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {q.options.map((opt, i) => (
+                              <label key={i} className={`flex items-center p-3 border-2 cursor-pointer transition-all ${(formData.customAnswers[q.id] || []).includes(opt) ? 'border-slate-900 bg-emerald-50 shadow-[2px_2px_0_#0F172A]' : 'border-slate-200 hover:border-slate-400 bg-white'}`}>
+                                <input 
+                                  type="checkbox" 
+                                  checked={(formData.customAnswers[q.id] || []).includes(opt)}
+                                  onChange={() => handleCustomAnswerChange(q.id, opt, 'checkbox')}
+                                  className="w-4 h-4 text-slate-900 accent-slate-900"
+                                />
+                                <span className="ml-3 font-bold text-slate-700">{opt}</span>
+                              </label>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -926,7 +930,7 @@ export default function Home() {
             <a href="mailto:contact@example.com" className="hover:text-emerald-400 transition-colors">
               聯絡我們
             </a>
-            <p className="text-slate-500">© 2026 全國會考分析系統.</p>
+            <p className="text-slate-500">&copy; 2026 全國會考分析系統 版權所有 All Rights Reserved.</p>
           </div>
         </div>
       </footer>
