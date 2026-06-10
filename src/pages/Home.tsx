@@ -30,7 +30,8 @@ import {
   Instagram,
   MessageCircle,
   AtSign,
-  MapPin
+  MapPin,
+  Lock
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { CustomQuestion, QuestionnaireData, SubjectScore, EssayScoreType } from '../types';
@@ -89,6 +90,7 @@ export default function Home() {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
+  const [showDisclaimerModal, setShowDisclaimerModal] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [showRegionModal, setShowRegionModal] = useState(false);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
@@ -924,6 +926,7 @@ export default function Home() {
             <button onClick={() => setShowShareModal(true)} className="hover:text-emerald-400 transition-colors">分享系統</button>
             <button onClick={() => setShowHelpModal(true)} className="hover:text-emerald-400 transition-colors">使用說明</button>
             <button onClick={() => setShowPrivacyModal(true)} className="hover:text-emerald-400 transition-colors">隱私權政策</button>
+            <button onClick={() => setShowDisclaimerModal(true)} className="hover:text-emerald-400 transition-colors">免責聲明</button>
             <a href="mailto:contact@example.com" className="hover:text-emerald-400 transition-colors">聯絡我們</a>
           </div>
 
@@ -934,52 +937,134 @@ export default function Home() {
       </footer>
 
       {showHelpModal && (
-      <div className="fixed inset-0 bg-slate-900/50 z-50 flex items-center justify-center p-4">
-        <div className="bg-white border-4 border-slate-900 p-8 max-w-lg w-full shadow-[8px_8px_0_#0F172A] relative">
-          <button onClick={() => setShowHelpModal(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-900">
+      <div className="fixed inset-0 bg-slate-900/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+        <div className="bg-white border-4 border-slate-900 p-8 max-w-2xl w-full max-h-[85vh] overflow-y-auto shadow-[8px_8px_0_#0F172A] relative">
+          <button onClick={() => setShowHelpModal(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-900 transition-colors">
             <X className="w-6 h-6" />
           </button>
           <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 bg-emerald-100 text-emerald-600 flex items-center justify-center rounded-full">
-              <HelpCircle className="w-5 h-5" />
+            <div className="w-12 h-12 bg-emerald-100 text-emerald-600 flex items-center justify-center rounded-full border-2 border-emerald-200">
+              <HelpCircle className="w-6 h-6" />
             </div>
-            <h3 className="text-xl font-bold">系統使用說明</h3>
+            <h3 className="text-2xl font-black text-slate-900">系統使用說明</h3>
           </div>
-          <div className="space-y-4 text-slate-600 text-sm leading-relaxed mb-8">
-            <p>1. 請輸入正確的個人會考成績與序位區間，本系統將依此數據提供進階分析。</p>
-            <p>2. 各招生區序位公告時間不同，若您尚未取得序位資訊，可勾選「無序位資訊/尚未公告」。</p>
-            <p>3. 填寫完成後將產生一組 <strong>專屬邀請碼</strong>，請持該碼前往合作之落點分析系統使用。</p>
-            <div className="bg-blue-50 p-4 border border-blue-100 text-blue-800 rounded-lg mt-4">
-              <p className="font-bold flex items-center gap-2 m-0"><Info className="w-4 h-4"/> 注意事項</p>
-              <p className="mt-1">邀請碼具時效性（當小時末失效），請於取得後盡速使用。</p>
+          <div className="space-y-6 text-slate-700 text-base leading-relaxed mb-8">
+            <section>
+              <h4 className="font-bold text-slate-900 mb-2 flex items-center gap-2">
+                <span className="w-6 h-6 bg-slate-900 text-white rounded-full flex items-center justify-center text-xs">1</span>
+                填寫正確資訊
+              </h4>
+              <p className="pl-8 text-sm text-slate-600">請依照您的會考成績單，據實輸入各科成績等級與標示。若所在學區已開放查詢序位區間，請一併輸入您的序位範圍，這將有助於系統進行更精確的落點分析。</p>
+            </section>
+            <section>
+              <h4 className="font-bold text-slate-900 mb-2 flex items-center gap-2">
+                <span className="w-6 h-6 bg-slate-900 text-white rounded-full flex items-center justify-center text-xs">2</span>
+                無序位資訊處理方式
+              </h4>
+              <p className="pl-8 text-sm text-slate-600">各就學區序位公告時間可能有所不同。若您在填寫時尚未取得序位資訊，請勾選「無序位資訊/尚未公告」選項，系統仍會根據您的各科成績幫您初步評估可能落點範圍。</p>
+            </section>
+            <section>
+              <h4 className="font-bold text-slate-900 mb-2 flex items-center gap-2">
+                <span className="w-6 h-6 bg-slate-900 text-white rounded-full flex items-center justify-center text-xs">3</span>
+                取得與使用邀請碼
+              </h4>
+              <p className="pl-8 text-sm text-slate-600">表單成功送出後，系統會自動生成一組為您專屬的「分析邀請碼」。取得後請將邀請碼複製，並前往我們合作的第三方落點分析平台輸入，即可解鎖詳細的落點預測與志願選填建議。</p>
+            </section>
+            <div className="bg-amber-50 p-5 border-l-4 border-amber-400 text-amber-800 rounded-r-lg mt-6">
+              <p className="font-black flex items-center gap-2 m-0 text-amber-900"><Info className="w-5 h-5"/> 重要提醒</p>
+              <p className="mt-2 text-sm font-medium">為保護資料安全，專屬邀請碼具備嚴格的時效性（將於整點自動失效歸零）。請於取得邀請碼後，盡速於時限內前往合作平台兌換使用。逾時請重新填寫表單獲取新碼。</p>
             </div>
           </div>
-          <button onClick={() => setShowHelpModal(false)} className="w-full py-3 bg-slate-900 text-white font-bold hover:bg-slate-800 transition-colors">
-            我知道了
+          <button onClick={() => setShowHelpModal(false)} className="w-full py-4 border-2 border-slate-900 bg-emerald-400 text-slate-900 font-black hover:bg-emerald-300 transition-colors shadow-[4px_4px_0_#0F172A] hover:translate-y-1 hover:translate-x-1 hover:shadow-none">
+            我都瞭解了，開始填寫
           </button>
         </div>
       </div>
       )}
 
       {showPrivacyModal && (
-      <div className="fixed inset-0 bg-slate-900/50 z-50 flex items-center justify-center p-4">
-        <div className="bg-white border-4 border-slate-900 p-8 max-w-lg w-full max-h-[80vh] overflow-y-auto shadow-[8px_8px_0_#0F172A] relative">
-          <button onClick={() => setShowPrivacyModal(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-900">
+      <div className="fixed inset-0 bg-slate-900/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+        <div className="bg-white border-4 border-slate-900 p-8 max-w-2xl w-full max-h-[85vh] overflow-y-auto shadow-[8px_8px_0_#0F172A] relative">
+          <button onClick={() => setShowPrivacyModal(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-900 transition-colors">
             <X className="w-6 h-6" />
           </button>
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 bg-rose-100 text-rose-600 flex items-center justify-center rounded-full">
-              <AlertCircle className="w-5 h-5" />
+          <div className="flex items-center gap-3 mb-6 pb-4 border-b-2 border-slate-100">
+            <div className="w-12 h-12 bg-indigo-100 text-indigo-600 flex items-center justify-center rounded-full border-2 border-indigo-200">
+              <Lock className="w-6 h-6" />
             </div>
-            <h3 className="text-xl font-bold">免責聲明與隱私權規範</h3>
+            <h3 className="text-2xl font-black text-slate-900">隱私權保護政策</h3>
           </div>
-          <div className="space-y-4 text-slate-600 text-sm leading-relaxed mb-8">
-            <p>1. <strong>資料來源與準確性：</strong>本系統數據為整合式估算，不代表最終官方分發結果。實際錄取情況應以各學區免試入學委員會公告為準。</p>
-            <p>2. <strong>隱私聲明：</strong>您所填寫的成績與序位資料僅用於分發估算與去識別化的大數據分析研究，本系統不會將資料用於其他商業用途。</p>
-            <p>3. <strong>免責條款：</strong>開發團隊對於使用者因參考本系統分析結果而做出之任何決策，不負任何直接或間接之法律責任。</p>
+          <div className="space-y-6 text-slate-600 text-sm leading-relaxed mb-8">
+            <p className="font-bold text-slate-800">歡迎您使用「全國會考分析系統」（以下簡稱本系統）。為了讓您能夠安心使用本系統的各項服務與資訊，特此向您說明本系統的隱私權保護政策，以保障您的權益，請您詳閱下列內容：</p>
+            
+            <div className="space-y-2">
+              <h4 className="text-base font-black text-slate-900">一、隱私權保護政策的適用範圍</h4>
+              <p>隱私權保護政策內容，包括本系統如何處理在您使用網站服務時收集到的個人識別與成績資料。隱私權保護政策不適用於本系統以外的相關連結網站，也不適用於非本系統所委託或參與管理的人員。</p>
+            </div>
+
+            <div className="space-y-2">
+              <h4 className="text-base font-black text-slate-900">二、個人資料的蒐集、處理及利用方式</h4>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>當您造訪本系統或使用本系統所提供之功能服務時，我們將視該服務功能性質，請您提供必要的資料（如會考成績、序位區間、聯絡信箱等）。</li>
+                <li>本系統所蒐集的資料，<strong>僅供落點估算、巨量數據去識別化統計與教育學術研究分析使用</strong>。</li>
+                <li>於一般瀏覽時，伺服器會自行記錄相關行徑，包括您使用連線設備的IP位址、使用時間、使用的瀏覽器、瀏覽及點選資料記錄等，做為我們增進網站服務的參考依據，此記錄為內部應用，決不對外公佈。</li>
+              </ul>
+            </div>
+
+            <div className="space-y-2">
+              <h4 className="text-base font-black text-slate-900">三、資料之保護與安全</h4>
+              <p>本系統主機均設有防火牆、防毒系統等相關的各項資訊安全設備及必要的安全防護措施，加以保護網站及您的個人資料。只由經過授權的人員才能接觸您的資料，相關處理人員皆簽有保密合約，如有違反保密義務者，將受相關法律處分。</p>
+            </div>
+
+            <div className="space-y-2">
+              <h4 className="text-base font-black text-slate-900">四、與第三人共用個人資料之政策</h4>
+              <p>本系統<strong>絕不會</strong>提供、交換、出租或出售任何您的個人資訊給其他個人、團體、私人企業或公務機關，但有法律依據或合約義務者，不在此限。合作的第三方落點分析平台僅會接收到去識別化後的授權代碼，無法直接反查您的原始個資身分。</p>
+            </div>
           </div>
-          <button onClick={() => setShowPrivacyModal(false)} className="w-full py-3 bg-slate-900 text-white font-bold hover:bg-slate-800 transition-colors">
-            關閉
+          <button onClick={() => setShowPrivacyModal(false)} className="w-full py-4 border-2 border-slate-900 bg-slate-100 font-black text-slate-900 hover:bg-slate-200 transition-colors">
+            我已詳閱並同意隱私權政策
+          </button>
+        </div>
+      </div>
+      )}
+
+      {showDisclaimerModal && (
+      <div className="fixed inset-0 bg-slate-900/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+        <div className="bg-white border-4 border-slate-900 p-8 max-w-2xl w-full max-h-[85vh] overflow-y-auto shadow-[8px_8px_0_#0F172A] relative">
+          <button onClick={() => setShowDisclaimerModal(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-900 transition-colors">
+            <X className="w-6 h-6" />
+          </button>
+          <div className="flex items-center gap-3 mb-6 pb-4 border-b-2 border-slate-100">
+            <div className="w-12 h-12 bg-rose-100 text-rose-600 flex items-center justify-center rounded-full border-2 border-rose-200">
+              <AlertCircle className="w-6 h-6" />
+            </div>
+            <h3 className="text-2xl font-black text-slate-900">免責聲明</h3>
+          </div>
+          <div className="space-y-6 text-slate-600 text-sm leading-relaxed mb-8">
+            <p className="font-bold text-slate-800 border-l-4 border-rose-400 pl-4 py-1">為了保障您的權益，在使用「全國會考分析系統」服務前，請務必詳細閱讀並同意以下免責聲明條款：</p>
+            
+            <div className="space-y-2">
+              <h4 className="text-base font-black text-slate-900">1. 資料來源與結果準確性說明</h4>
+              <p>本系統提供之所有落點估算、志願分析與學區數據，皆為開發團隊基於歷年錄取數據、考量少子化趨勢及本年度大數據集結所進行的<strong>統計與推估結果</strong>。本系統與各區免試入學委員會、教育部等官方機構無任何隸屬關係。系統產出之結果「僅供考生與家長參考」，絕不代表最終官方分發、錄取之保證。</p>
+            </div>
+            
+            <div className="space-y-2">
+              <h4 className="text-base font-black text-slate-900">2. 使用風險與決策責任承擔</h4>
+              <p>選填志願關乎考生的重大升學權益，影響因素包含但不限於招生名額變動、當年考題難易度、考區學生偏好改變等不可控變數。使用者知悉並同意，因參考本系統提供的數據、圖表或建議而做出的任何志願選填決策，其全部風險與最終結果均由使用者自行承擔。開發團隊、平台維運者及其關聯方，對於使用者因此產生的任何直接、間接、附帶或衍生性之損失（包含但不限於落榜、高分低就等），概不負任何法律或賠償責任。</p>
+            </div>
+            
+            <div className="space-y-2">
+              <h4 className="text-base font-black text-slate-900">3. 服務中斷或系統故障免責</h4>
+              <p>本系統會盡最大努力維持穩定運作，但因硬體故障、網路連線問題、第三方服務異常、不可抗力因素（如天災），或例行性維護、資料庫更新等情況，導致系統中斷、資料遺失或延遲時，本團隊不負任何補償或賠償責任。使用者應自行備份重要資料並預留志願選填時間。</p>
+            </div>
+
+            <div className="space-y-2">
+              <h4 className="text-base font-black text-slate-900">4. 聲明之修改與效力</h4>
+              <p>本系統保留隨時修改、更新、暫停或完全終止提供本服務及本免責聲明內容之權利，修改後會於網站公告，不另行個別通知。使用者繼續使用本系統，即代表已瞭解並完全接受修改後的條款與聲明。</p>
+            </div>
+          </div>
+          <button onClick={() => setShowDisclaimerModal(false)} className="w-full py-4 border-2 border-slate-900 bg-rose-50 font-black text-rose-700 hover:bg-rose-100 transition-colors shadow-[4px_4px_0_#0F172A] hover:translate-y-1 hover:translate-x-1 hover:shadow-none">
+            我接受並同意本免責聲明
           </button>
         </div>
       </div>
