@@ -4,7 +4,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   PieChart, Pie, Cell, LineChart, Line, AreaChart, Area
 } from 'recharts';
-import { Lock, LayoutDashboard, Users, MapPin, Loader2, Download, Table, ClipboardList, Calendar, LogOut, ArrowUpDown, ArrowUp, ArrowDown, Eye, X, ExternalLink } from 'lucide-react';
+import { Lock, LayoutDashboard, Users, MapPin, Loader2, Download, Table, ClipboardList, Calendar, LogOut, ArrowUpDown, ArrowUp, ArrowDown, Eye, X, ExternalLink, Settings } from 'lucide-react';
 import { Header } from '../components/Header';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
@@ -17,11 +17,14 @@ export default function Admin() {
   const [data, setData] = useState<any[]>([]); // combined
   const [fullDataList, setFullDataList] = useState<any[]>([]);
   const [skipDataList, setSkipDataList] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState<'overview' | 'full' | 'skip' | 'settings' | 'logs'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'full' | 'skip' | 'settings' | 'backups' | 'logs'>('overview');
 
   // Settings State
   const [announcementDate, setAnnouncementDate] = useState('2026-06-16T12:00');
   const [customQuestions, setCustomQuestions] = useState<any[]>([]);
+  const [backups, setBackups] = useState<any[]>([]);
+  const [showBackupPreview, setShowBackupPreview] = useState<any | null>(null);
+  const [showSaveConfirm, setShowSaveConfirm] = useState(false);
   const [subjectScoreStartTime, setSubjectScoreStartTime] = useState('');
   const [subjectScoreEndTime, setSubjectScoreEndTime] = useState('');
   const [subjectScoreEnabled, setSubjectScoreEnabled] = useState(true);
@@ -134,18 +137,32 @@ export default function Admin() {
     }
   };
 
+  const formatDateTimeLocal = (dateString: string) => {
+    if (!dateString) return '';
+    const d = new Date(dateString);
+    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+    return d.toISOString().slice(0, 16);
+  };
+
   const fetchSettings = async () => {
     try {
       if (!supabase) return;
       const { data, error } = await supabase.from('survey_config').select('*').limit(1).maybeSingle();
       if (data) {
-        if (data.announcement_date) setAnnouncementDate(new Date(data.announcement_date).toISOString().slice(0, 16));
-        if (data.custom_questions) setCustomQuestions(data.custom_questions);
-        if (data.subject_score_start_time) setSubjectScoreStartTime(new Date(data.subject_score_start_time).toISOString().slice(0, 16));
-        if (data.subject_score_end_time) setSubjectScoreEndTime(new Date(data.subject_score_end_time).toISOString().slice(0, 16));
+        if (data.announcement_date) setAnnouncementDate(formatDateTimeLocal(data.announcement_date));
+        if (data.custom_questions) {
+          const actualQs = data.custom_questions.filter((q: any) => q.id !== '__SYSTEM_BACKUPS__');
+          const backupsObj = data.custom_questions.find((q: any) => q.id === '__SYSTEM_BACKUPS__');
+          setCustomQuestions(actualQs);
+          if (backupsObj && backupsObj.data) {
+             setBackups(backupsObj.data);
+          }
+        }
+        if (data.subject_score_start_time) setSubjectScoreStartTime(formatDateTimeLocal(data.subject_score_start_time));
+        if (data.subject_score_end_time) setSubjectScoreEndTime(formatDateTimeLocal(data.subject_score_end_time));
         if (data.subject_score_enabled !== undefined && data.subject_score_enabled !== null) setSubjectScoreEnabled(data.subject_score_enabled);
-        if (data.system_start_time) setSystemStartTime(new Date(data.system_start_time).toISOString().slice(0, 16));
-        if (data.system_end_time) setSystemEndTime(new Date(data.system_end_time).toISOString().slice(0, 16));
+        if (data.system_start_time) setSystemStartTime(formatDateTimeLocal(data.system_start_time));
+        if (data.system_end_time) setSystemEndTime(formatDateTimeLocal(data.system_end_time));
         if (data.system_enabled !== undefined && data.system_enabled !== null) setSystemEnabled(data.system_enabled);
       }
     } catch (e) {
@@ -159,7 +176,9 @@ export default function Admin() {
       setMessage('');
       if (!supabase) throw new Error("Supabase is not configured");
       const isoDate = new Date(announcementDate).toISOString();
-      const payload: any = {
+      
+      const backupToSave = {
+        timestamp: new Date().toISOString(),
         announcement_date: isoDate,
         custom_questions: customQuestions,
         subject_score_start_time: subjectScoreStartTime ? new Date(subjectScoreStartTime).toISOString() : null,
@@ -169,6 +188,13 @@ export default function Admin() {
         system_end_time: systemEndTime ? new Date(systemEndTime).toISOString() : null,
         system_enabled: systemEnabled
       };
+      const newBackups = [backupToSave, ...backups].slice(0, 3);
+      
+      const payload: any = {
+        ...backupToSave
+      };
+      delete payload.timestamp;
+      payload.custom_questions = [...customQuestions, { id: '__SYSTEM_BACKUPS__', data: newBackups }];
       
       // Try update first
       const { data: existing } = await supabase.from('survey_config').select('id').limit(1).maybeSingle();
@@ -368,12 +394,7 @@ export default function Admin() {
             </form>
           </div>
           <div className="mt-8 text-slate-500 text-xs font-bold tracking-widest relative z-10 flex flex-col items-center gap-2">
-            <p>
-              &copy; {new Date().getFullYear()} 全國會考分析系統 版權所有
-            </p>
-            <p className="flex items-center gap-1">
-              DESIGNED WITH <span className="text-rose-500 animate-pulse">♥</span> IN TAIWAN
-            </p>
+            <p>&copy; {new Date().getFullYear()} 全國會考分析系統 版權所有</p>
           </div>
         </div>
       </div>
@@ -500,6 +521,7 @@ export default function Admin() {
             { id: 'full', label: '完整填寫資料' },
             { id: 'skip', label: '無序位填寫資料' },
             { id: 'settings', label: '系統設定與自訂問卷' },
+            { id: 'backups', label: '系統版本備份紀錄' },
             { id: 'logs', label: '系統安全與日誌' }
           ].map(tab => (
             <button
@@ -864,12 +886,19 @@ export default function Admin() {
 
               <div className="mb-6">
                 <label className="block font-bold text-slate-700 mb-2">序位資訊公告時間</label>
-                <input 
-                  type="datetime-local" 
-                  value={announcementDate} 
-                  onChange={(e) => setAnnouncementDate(e.target.value)}
-                  className="border-2 border-slate-300 p-3 w-full sm:w-auto focus:border-slate-900 focus:outline-none"
-                />
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <input 
+                    type="datetime-local" 
+                    value={announcementDate} 
+                    onChange={(e) => setAnnouncementDate(e.target.value)}
+                    className="border-2 border-slate-300 p-3 w-full sm:w-auto flex-1 focus:border-slate-900 focus:outline-none"
+                  />
+                  {announcementDate && (
+                    <div className="flex items-center text-emerald-600 bg-emerald-50 px-4 py-2 border-2 border-emerald-200">
+                      目前設定為：{new Date(announcementDate).toLocaleString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                    </div>
+                  )}
+                </div>
                 <p className="text-sm text-slate-500 mt-2">在公告時間之前，系統會強制關閉「填寫序位資訊」功能，讓使用者直接獲取邀請碼。</p>
               </div>
 
@@ -918,19 +947,19 @@ export default function Admin() {
             </div>
 
             <div className="bg-white border-2 border-slate-900 p-6 sm:p-8 shadow-[4px_4px_0_#0F172A]">
-              <div className="flex items-center justify-between mb-6 pb-2 border-b-2 border-slate-100">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 pb-4 border-b-2 border-slate-100">
                 <h3 className="text-xl font-bold flex items-center">自訂問卷題目</h3>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2 w-full sm:w-auto">
                   <button 
                     onClick={() => setShowPreviewModal(true)}
-                    className="px-4 py-2 border-2 border-slate-900 bg-white text-slate-900 font-bold text-sm flex items-center justify-center gap-2 shadow-[2px_2px_0_#0F172A] hover:translate-y-0.5 hover:shadow-none transition-all"
+                    className="flex-1 sm:flex-none px-4 py-2 border-2 border-slate-900 bg-white text-slate-900 font-bold text-sm flex items-center justify-center gap-2 shadow-[2px_2px_0_#0F172A] hover:translate-y-0.5 hover:shadow-none transition-all"
                   >
                     <Eye className="w-4 h-4" />
-                    <span className="hidden sm:inline">表單預覽</span>
+                    <span>表單預覽</span>
                   </button>
                   <button 
                     onClick={addCustomQuestion}
-                    className="px-4 py-2 bg-slate-900 text-white font-bold text-sm hover:bg-slate-800 transition-colors shadow-[2px_2px_0_#34D399]"
+                    className="flex-1 sm:flex-none px-4 py-2 border-2 border-slate-900 bg-slate-900 text-white font-bold text-sm hover:bg-slate-800 transition-colors shadow-[2px_2px_0_#34D399]"
                   >
                     + 新增題目
                   </button>
@@ -1047,15 +1076,70 @@ export default function Admin() {
 
               </div>
             </div>
-            
-            <div className="pt-4 border-t-4 border-slate-900">
-              <button 
-                onClick={saveSettings}
-                className="w-full py-4 bg-emerald-400 text-slate-900 font-black text-xl border-2 border-slate-900 shadow-[6px_6px_0_#0F172A] hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-all flex items-center justify-center"
-              >
-                {loading ? <Loader2 className="w-6 h-6 animate-spin mr-2" /> : null}
-                儲存所有設定
-              </button>
+
+          </div>
+        )}
+
+        {activeTab === 'backups' && (
+          <div className="space-y-8 mb-12">
+            <div className="bg-white border-2 border-slate-900 p-6 sm:p-8 shadow-[4px_4px_0_#0F172A] mb-8">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 pb-4 border-b-2 border-slate-100">
+                <h3 className="text-xl font-bold flex items-center">系統版本備份</h3>
+              </div>
+              <p className="text-sm text-slate-600 mb-6 font-medium">系統會自動保存最近 3 次的設定紀錄。您可以隨時預覽或直接載入覆蓋至目前的草稿，再進行儲存發佈。</p>
+              
+              {backups.length === 0 ? (
+                <div className="text-center py-8 bg-slate-50 border-2 border-dashed border-slate-300 text-slate-500 font-bold">
+                  目前尚未有備份紀錄
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="mb-6 p-4 bg-emerald-50 border-2 border-emerald-200 flex items-center justify-between">
+                    <div>
+                      <span className="block text-sm font-bold text-emerald-800 mb-1">目前線上正式版本最後發佈時間</span>
+                      <span className="text-emerald-700 font-mono text-sm">{new Date(backups[0].timestamp).toLocaleString('zh-TW')}</span>
+                    </div>
+                  </div>
+                  {backups.map((bk, i) => (
+                    <div key={i} className={`flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4 p-4 border-2 ${i === 0 ? 'border-emerald-400 bg-emerald-50/30' : 'border-slate-200 bg-slate-50'} hover:border-slate-900 transition-colors group`}>
+                      <div>
+                        <span className="font-bold text-slate-900 block mb-1">
+                          版本紀錄 #{backups.length - i}
+                          {i === 0 && <span className="ml-2 text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 border border-emerald-200">目前版本</span>}
+                        </span>
+                        <span className="text-xs font-mono text-slate-500 bg-white px-2 py-1 border border-slate-200 rounded">{new Date(bk.timestamp).toLocaleString('zh-TW')}</span>
+                      </div>
+                      <div className="flex flex-wrap gap-2 w-full xl:w-auto mt-2 xl:mt-0">
+                        <button 
+                          onClick={() => setShowBackupPreview(bk)}
+                          className="flex-1 sm:flex-none px-4 py-2 border-2 border-slate-900 bg-white text-slate-900 font-bold text-sm flex items-center justify-center gap-2 hover:bg-slate-100 transition-colors shadow-[2px_2px_0_#0F172A] hover:translate-y-0.5 hover:shadow-none"
+                        >
+                          <Eye className="w-4 h-4" /> 預覽這版
+                        </button>
+                        <button 
+                          onClick={() => {
+                            if (window.confirm('確定要載入此版本？\n此操作將覆蓋您目前尚未儲存的設定（直到您手動點擊「儲存所有設定」才會生效）')) {
+                              if (bk.announcement_date) setAnnouncementDate(formatDateTimeLocal(bk.announcement_date));
+                              if (bk.custom_questions) setCustomQuestions(bk.custom_questions);
+                              if (bk.subject_score_start_time) setSubjectScoreStartTime(formatDateTimeLocal(bk.subject_score_start_time));
+                              if (bk.subject_score_end_time) setSubjectScoreEndTime(formatDateTimeLocal(bk.subject_score_end_time));
+                              setSubjectScoreEnabled(bk.subject_score_enabled ?? true);
+                              if (bk.system_start_time) setSystemStartTime(formatDateTimeLocal(bk.system_start_time));
+                              if (bk.system_end_time) setSystemEndTime(formatDateTimeLocal(bk.system_end_time));
+                              setSystemEnabled(bk.system_enabled ?? true);
+                              alert('已載入該版本設定！若要正式生效發佈，請回到「系統設定與自訂問卷」並點擊最下方「儲存所有設定」。');
+                              setActiveTab('settings');
+                            }
+                          }}
+                          className="flex-1 sm:flex-none px-4 py-2 bg-indigo-500 text-white font-bold text-sm hover:bg-indigo-600 transition-colors shadow-[2px_2px_0_#312E81] border-2 border-indigo-900"
+                        >
+                          套用到目前草稿
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -1165,7 +1249,7 @@ export default function Admin() {
                 <div className="bg-white border-2 border-slate-900 p-6 sm:p-8 relative group">
                   <div className="absolute inset-0 bg-indigo-500 translate-x-2 translate-y-2 -z-10 border-2 border-slate-900 pointer-events-none"></div>
                   
-                  <div className="flex items-center justify-between mb-6 pb-4 border-b-2 border-slate-100">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 pb-4 border-b-2 border-slate-100">
                     <h3 className="text-xl font-black flex items-center text-slate-900 uppercase tracking-widest">
                       <LayoutDashboard className="w-6 h-6 mr-3 text-indigo-500" />
                       系統狀態與排程
@@ -1341,20 +1425,184 @@ export default function Admin() {
         </div>
       )}
 
+      {showBackupPreview && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-white border-4 border-slate-900 w-full max-w-3xl my-8 relative shadow-[12px_12px_0_#0F172A] animate-in fade-in zoom-in-95">
+            <button 
+              onClick={() => setShowBackupPreview(null)}
+              className="absolute -top-4 -right-4 w-10 h-10 bg-rose-400 border-2 border-slate-900 flex items-center justify-center rounded-none shadow-[2px_2px_0_#0F172A] hover:translate-y-0.5 hover:shadow-none transition-all z-10"
+            >
+              <X className="w-6 h-6 text-slate-900" />
+            </button>
+            <div className="p-6 border-b-2 border-slate-900 bg-indigo-400 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <h2 className="text-xl sm:text-2xl font-black text-slate-900 uppercase tracking-widest flex items-center">
+                備份版本預覽
+              </h2>
+              <span className="bg-slate-900 text-white px-3 py-1 text-sm font-mono font-bold whitespace-nowrap">
+                {new Date(showBackupPreview.timestamp).toLocaleString('zh-TW')}
+              </span>
+            </div>
+            
+            <div className="p-6 bg-slate-50 border-b-2 border-slate-900 space-y-4 font-medium text-sm text-slate-700">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-white p-4 border-2 border-slate-200">
+                  <span className="block text-xs uppercase tracking-wider text-slate-400 mb-1 font-bold">系統開放狀態</span>
+                  <span className={showBackupPreview.system_enabled ? 'text-emerald-600 font-bold' : 'text-rose-600 font-bold'}>{showBackupPreview.system_enabled ? '開放中' : '關閉中'}</span>
+                </div>
+                <div className="bg-white p-4 border-2 border-slate-200">
+                  <span className="block text-xs uppercase tracking-wider text-slate-400 mb-1 font-bold">成績輸入功能</span>
+                  <span className={showBackupPreview.subject_score_enabled ? 'text-emerald-600 font-bold' : 'text-rose-600 font-bold'}>{showBackupPreview.subject_score_enabled ? '開放中' : '關閉中'}</span>
+                </div>
+                <div className="bg-white p-4 border-2 border-slate-200 col-span-2">
+                  <span className="block text-xs uppercase tracking-wider text-slate-400 mb-1 font-bold">序位區間公告時間</span>
+                  <span className="font-bold text-slate-900">{showBackupPreview.announcement_date ? new Date(showBackupPreview.announcement_date).toLocaleString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '未設定'}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 sm:p-8 bg-white max-h-[50vh] overflow-y-auto">
+              {(!showBackupPreview.custom_questions || showBackupPreview.custom_questions.length === 0) ? (
+                <div className="text-center py-12 text-slate-400 font-bold">
+                  此版本沒有自訂問卷題目
+                </div>
+              ) : (
+                <div className="space-y-8 pointer-events-none opacity-90">
+                  {showBackupPreview.custom_questions.map((q: any) => (
+                    <div key={q.id} className="border-2 border-slate-200 p-6 relative">
+                      <div className="absolute -top-3 -left-3 bg-indigo-100 text-indigo-700 px-2 py-1 text-xs font-bold border-2 border-indigo-200">
+                        {q.type === 'text' ? '簡答題' : q.type === 'radio' ? '單選題' : '多選題'}
+                      </div>
+                      {q.required && <span className="absolute -top-3 -right-3 bg-rose-100 text-rose-700 px-2 py-1 text-xs font-bold border-2 border-rose-200">必填</span>}
+                      
+                      <label className="block text-lg font-bold text-slate-900 mb-4 mt-2">
+                        {q.question}
+                      </label>
+                      
+                      {(q.type === 'radio' || q.type === 'checkbox') && (
+                        <div className="space-y-3">
+                          {q.options?.map((opt: string, i: number) => (
+                            <label key={i} className="flex items-center p-3 border-2 border-slate-200 bg-slate-50">
+                              <input 
+                                type={q.type} 
+                                className="w-5 h-5 accent-slate-900 border-2 border-slate-400 bg-white"
+                              />
+                              <span className="ml-3 font-medium text-slate-700">{opt}</span>
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                      
+                      {q.type === 'text' && (
+                        <input 
+                          type="text" 
+                          placeholder="簡答題填寫區..."
+                          className="w-full border-2 border-slate-200 p-3 bg-slate-50"
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            
+            <div className="p-6 border-t-2 border-slate-900 bg-slate-50 flex justify-end gap-3">
+              <button 
+                onClick={() => {
+                  if (window.confirm('確定要載入此版本？\n此操作將覆蓋您目前尚未儲存的設定（直到您手動點擊「儲存所有設定」才會生效）')) {
+                    const bk = showBackupPreview;
+                    if (bk.announcement_date) setAnnouncementDate(formatDateTimeLocal(bk.announcement_date));
+                    if (bk.custom_questions) setCustomQuestions(bk.custom_questions);
+                    if (bk.subject_score_start_time) setSubjectScoreStartTime(formatDateTimeLocal(bk.subject_score_start_time));
+                    if (bk.subject_score_end_time) setSubjectScoreEndTime(formatDateTimeLocal(bk.subject_score_end_time));
+                    setSubjectScoreEnabled(bk.subject_score_enabled ?? true);
+                    if (bk.system_start_time) setSystemStartTime(formatDateTimeLocal(bk.system_start_time));
+                    if (bk.system_end_time) setSystemEndTime(formatDateTimeLocal(bk.system_end_time));
+                    setSystemEnabled(bk.system_enabled ?? true);
+                    setShowBackupPreview(null);
+                    alert('已載入該版本設定！若要正式生效發佈，請點擊最下方「儲存所有設定」。');
+                  }
+                }}
+                className="px-6 py-2 bg-emerald-400 text-slate-900 font-black border-2 border-slate-900 shadow-[4px_4px_0_#0F172A] hover:translate-y-0.5 hover:translate-x-0.5 hover:shadow-[2px_2px_0_#0F172A] transition-all"
+              >
+                套用這版
+              </button>
+              <button 
+                onClick={() => setShowBackupPreview(null)}
+                className="px-6 py-2 bg-slate-900 text-white font-bold border-2 border-slate-900 shadow-[4px_4px_0_#0F172A] hover:translate-y-0.5 hover:translate-x-0.5 hover:shadow-[2px_2px_0_#0F172A] transition-all"
+              >
+                關閉
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showSaveConfirm && (
+        <div className="fixed inset-0 bg-slate-900/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white border-4 border-slate-900 p-8 max-w-md w-full shadow-[8px_8px_0_#0F172A] relative text-center">
+            <button onClick={() => setShowSaveConfirm(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-900 transition-colors">
+              <X className="w-6 h-6" />
+            </button>
+            <div className="mx-auto w-16 h-16 bg-amber-100 text-amber-600 flex items-center justify-center rounded-full border-2 border-amber-200 mb-6 mt-2 shadow-[4px_4px_0_#FCD34D]">
+              <Settings className="w-8 h-8" />
+            </div>
+            <h3 className="text-2xl font-black text-slate-900 mb-2">確認發佈最新設定？</h3>
+            <p className="text-sm font-bold text-slate-600 mb-6 leading-relaxed">
+              請再次確認您目前要發佈的內容是否正確。<br/>按下「確認發佈」後，最新設定與自訂問卷將立即於使用者前台生效！
+            </p>
+            
+            <div className="text-left bg-slate-50 p-4 border-2 border-slate-200 mb-8 text-sm text-slate-700 space-y-3 font-medium">
+              <div className="flex border-b border-slate-200 pb-2">
+                <span className="w-32 font-bold text-slate-900 shrink-0">表單系統狀態</span>
+                <span>{systemEnabled ? `✅ 開放中` : '❌ 關閉中'}</span>
+              </div>
+              <div className="flex border-b border-slate-200 pb-2">
+                <span className="w-32 font-bold text-slate-900 shrink-0">成績/序位收集</span>
+                <span>{subjectScoreEnabled ? `✅ 開放中` : '❌ 關閉中'}</span>
+              </div>
+              <div className="flex border-b border-slate-200 pb-2">
+                <span className="w-32 font-bold text-slate-900 shrink-0">序位公告時間</span>
+                <span className="text-emerald-600">{announcementDate ? new Date(announcementDate).toLocaleString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '未設定'}</span>
+              </div>
+              <div className="flex">
+                <span className="w-32 font-bold text-slate-900 shrink-0">自訂問卷題目</span>
+                <span>共 {customQuestions.length} 題</span>
+              </div>
+            </div>
+
+            <div className="flex gap-4">
+              <button 
+                onClick={() => setShowSaveConfirm(false)}
+                className="flex-1 py-3 border-2 border-slate-900 bg-slate-100 text-slate-900 font-black hover:bg-slate-200 transition-colors"
+              >
+                取消
+              </button>
+              <button 
+                onClick={() => {
+                  setShowSaveConfirm(false);
+                  saveSettings();
+                }}
+                className="flex-1 py-3 border-2 border-slate-900 bg-emerald-400 text-slate-900 font-black shadow-[4px_4px_0_#0F172A] hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-all flex items-center justify-center"
+              >
+                {loading ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : null}
+                確認發佈
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Footer / Copyright */}
-      <footer className="mt-12 py-10 border-t-2 border-slate-900 bg-slate-900 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-slate-800 rounded-full blur-3xl opacity-50 -translate-y-1/2 translate-x-1/3"></div>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 flex flex-col md:flex-row items-center justify-between gap-4">
+      <footer className="mt-12 py-8 border-t-2 border-slate-900 bg-slate-900 relative">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 bg-emerald-400 flex items-center justify-center -rotate-6 shadow-[2px_2px_0_#34D399]">
               <Lock className="w-4 h-4 text-slate-900" />
             </div>
             <p className="text-white font-black tracking-widest text-sm">管理員作業系統</p>
           </div>
-          <p className="text-slate-400 font-bold text-xs tracking-widest uppercase flex items-center gap-2">
-            &copy; {new Date().getFullYear()} 全國會考分析系統 版權所有 
-            <span className="w-1.5 h-1.5 rounded-full bg-slate-600 hidden sm:inline-block"></span>
-            <span className="hidden sm:inline">DESIGNED WITH <span className="text-rose-500 animate-pulse">♥</span> IN TAIWAN</span>
+          <p className="text-slate-500 font-bold text-xs tracking-widest uppercase flex items-center gap-2">
+            &copy; {new Date().getFullYear()} 全國會考分析系統 版權所有
           </p>
         </div>
       </footer>
