@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-  PieChart, Pie, Cell
+  PieChart, Pie, Cell, LineChart, Line, AreaChart, Area
 } from 'recharts';
-import { Lock, LayoutDashboard, Users, MapPin, Loader2, Download, Table, ClipboardList, Calendar, LogOut } from 'lucide-react';
+import { Lock, LayoutDashboard, Users, MapPin, Loader2, Download, Table, ClipboardList, Calendar, LogOut, ArrowUpDown, ArrowUp, ArrowDown, Eye, X, ExternalLink } from 'lucide-react';
 import { Header } from '../components/Header';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
@@ -31,16 +31,34 @@ export default function Admin() {
   const [message, setMessage] = useState('');
   const [adminLogs, setAdminLogs] = useState<any[]>([]);
   const [newPassword, setNewPassword] = useState('');
+  
+  // Preview Modal
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [previewAnswers, setPreviewAnswers] = useState<Record<string, any>>({});
 
   // Table view state
   const [tableSearch, setTableSearch] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' } | null>(null);
 
   useEffect(() => {
     setCurrentPage(1);
     setTableSearch('');
   }, [activeTab, rowsPerPage]);
+
+  const handleSort = (key: string) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const renderSortIcon = (key: string) => {
+    if (sortConfig?.key !== key) return <ArrowUpDown className="w-4 h-4 ml-1 opacity-50 inline" />;
+    return sortConfig.direction === 'asc' ? <ArrowUp className="w-4 h-4 ml-1 inline text-slate-900" /> : <ArrowDown className="w-4 h-4 ml-1 inline text-slate-900" />;
+  };
 
   const fetchLogs = async () => {
     if (!supabase) return;
@@ -210,6 +228,23 @@ export default function Admin() {
     setCustomQuestions(customQuestions.filter(q => q.id !== id));
   };
 
+  const handlePreviewAnswerChange = (questionId: string, value: any, type: string) => {
+    setPreviewAnswers(prev => {
+      const next = { ...prev };
+      if (type === 'checkbox') {
+        const current = next[questionId] || [];
+        if (current.includes(value)) {
+          next[questionId] = current.filter((v: string) => v !== value);
+        } else {
+          next[questionId] = [...current, value];
+        }
+      } else {
+        next[questionId] = value;
+      }
+      return next;
+    });
+  };
+
   const fetchAllData = async (tableName: string) => {
     let allData: any[] = [];
     let page = 0;
@@ -357,6 +392,41 @@ export default function Admin() {
   }, {} as Record<string, number>);
   const identityChartData = Object.keys(identityCounts).map(key => ({ name: key, count: identityCounts[key] }));
 
+  const scoreMap: Record<string, number> = {'A++': 7, 'A+': 6, 'A': 5, 'B++': 4, 'B+': 3, 'B': 2, 'C': 1, '': 0};
+  const totalScoreCounts = data.reduce((acc, curr) => {
+    const points = (scoreMap[curr.chineseScore || ''] || 0) + 
+                   (scoreMap[curr.mathScore || ''] || 0) + 
+                   (scoreMap[curr.englishScore || ''] || 0) + 
+                   (scoreMap[curr.socialScore || ''] || 0) + 
+                   (scoreMap[curr.scienceScore || ''] || 0);
+    let rangeLabel = '未完整填寫';
+    if (points > 0) {
+      const lower = Math.floor(points / 5) * 5;
+      const upper = lower + 4;
+      rangeLabel = `${lower}-${upper} 積分`;
+    }
+    acc[rangeLabel] = (acc[rangeLabel] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+  const totalScoreChartData = Object.keys(totalScoreCounts)
+    .map(key => ({ name: key, count: totalScoreCounts[key] }))
+    .sort((a, b) => {
+      if (a.name === '未完整填寫') return 1;
+      if (b.name === '未完整填寫') return -1;
+      const aVal = parseInt(a.name.split('-')[0]) || 0;
+      const bVal = parseInt(b.name.split('-')[0]) || 0;
+      return bVal - aVal;
+    });
+
+  const dailyCounts = data.reduce((acc, curr) => {
+    const dateStr = new Date(curr.timestamp).toLocaleDateString('zh-TW', { month: '2-digit', day: '2-digit' });
+    acc[dateStr] = (acc[dateStr] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+  const dailyTrendData = Object.keys(dailyCounts)
+    .map(key => ({ date: key, count: dailyCounts[key] }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+
   return (
     <div className="min-h-screen bg-slate-50 font-sans">
       <Header onShareClick={() => {}} />
@@ -366,7 +436,15 @@ export default function Admin() {
             <LayoutDashboard className="w-6 h-6 sm:w-8 sm:h-8 text-blue-600" />
             管理員分析看板
           </h1>
-          <div className="flex gap-2 sm:gap-4 w-full sm:w-auto">
+          <div className="flex flex-wrap gap-2 sm:gap-4 w-full sm:w-auto">
+            <button 
+              onClick={() => window.open(window.location.pathname + '#/', '_blank')}
+              className="flex-1 sm:flex-none px-4 py-2 border-2 border-slate-900 bg-sky-200 font-bold flex items-center justify-center gap-2 shadow-[2px_2px_0_#0F172A] hover:translate-y-0.5 hover:shadow-none transition-all text-slate-900"
+            >
+              <ExternalLink className="w-5 h-5" />
+              <span className="hidden sm:inline">檢視前台</span>
+              <span className="sm:hidden">前台</span>
+            </button>
             <button 
               onClick={exportToCSV} 
               disabled={data.length === 0}
@@ -502,6 +580,44 @@ export default function Admin() {
                 </div>
               </div>
             </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
+              <div className="bg-white border-2 border-slate-900 p-4 sm:p-6 shadow-[4px_4px_0_#0F172A]">
+                <h3 className="text-lg sm:text-xl font-bold mb-6 flex items-center pb-2 border-b-2 border-slate-100">
+                  <ClipboardList className="w-5 h-5 mr-2 text-indigo-500" />
+                  會考總積分分佈
+                </h3>
+                <div className="h-64 sm:h-80 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={totalScoreChartData} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis dataKey="name" tick={{fontSize: 11, fontWeight: 'bold'}} interval={0} angle={-(window.innerWidth < 640 ? 45 : 0)} textAnchor={window.innerWidth < 640 ? "end" : "middle"} height={window.innerWidth < 640 ? 60 : 30} />
+                      <YAxis tick={{fontSize: 11, fontWeight: 'bold'}} allowDecimals={false} />
+                      <Tooltip wrapperStyle={{ fontWeight: 'bold' }} />
+                      <Bar dataKey="count" fill="#8B5CF6" radius={[4, 4, 0, 0]} name="人數" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              <div className="bg-white border-2 border-slate-900 p-4 sm:p-6 shadow-[4px_4px_0_#0F172A]">
+                <h3 className="text-lg sm:text-xl font-bold mb-6 flex items-center pb-2 border-b-2 border-slate-100">
+                  <Calendar className="w-5 h-5 mr-2 text-amber-500" />
+                  每日填寫趨勢
+                </h3>
+                <div className="h-64 sm:h-80 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={dailyTrendData} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis dataKey="date" tick={{fontSize: 11, fontWeight: 'bold'}} />
+                      <YAxis tick={{fontSize: 11, fontWeight: 'bold'}} allowDecimals={false} />
+                      <Tooltip wrapperStyle={{ fontWeight: 'bold' }} />
+                      <Area type="monotone" dataKey="count" stroke="#F59E0B" fill="#FDE68A" name="填寫人數" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            </div>
           </>
         )}
 
@@ -541,21 +657,56 @@ export default function Admin() {
                 const searchStr = `${row.region} ${row.identity} ${row.examYear} ${row.chineseScore} ${row.mathScore} ${row.englishScore} ${row.socialScore} ${row.scienceScore} ${row.email || ''}`.toLowerCase();
                 return searchStr.includes(tableSearch.toLowerCase());
               });
-              const totalPages = Math.ceil(filteredData.length / rowsPerPage) || 1;
+
+              const sortedData = [...filteredData].sort((a, b) => {
+                if (!sortConfig) return 0;
+                
+                let valA = a[sortConfig.key];
+                let valB = b[sortConfig.key];
+                
+                if (sortConfig.key === 'timestamp') {
+                  valA = new Date(a.timestamp).getTime();
+                  valB = new Date(b.timestamp).getTime();
+                } else if (sortConfig.key === 'totalScore') {
+                  const scoreMap: Record<string, number> = {'A++': 7, 'A+': 6, 'A': 5, 'B++': 4, 'B+': 3, 'B': 2, 'C': 1, '': 0};
+                  const getPoints = (s: any) => (scoreMap[s?.chineseScore || ''] || 0) + (scoreMap[s?.mathScore || ''] || 0) + (scoreMap[s?.englishScore || ''] || 0) + (scoreMap[s?.socialScore || ''] || 0) + (scoreMap[s?.scienceScore || ''] || 0);
+                  valA = getPoints(a);
+                  valB = getPoints(b);
+                } else if (sortConfig.key === 'examYear') {
+                  valA = parseInt(a.examYear || '0', 10);
+                  valB = parseInt(b.examYear || '0', 10);
+                }
+                
+                if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
+                if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
+                return 0;
+              });
+
+              const totalPages = Math.ceil(sortedData.length / rowsPerPage) || 1;
               const startIndex = (currentPage - 1) * rowsPerPage;
-              const paginatedData = filteredData.slice(startIndex, startIndex + rowsPerPage);
+              const paginatedData = sortedData.slice(startIndex, startIndex + rowsPerPage);
 
               return (
                 <>
                   <div className="overflow-x-auto w-full">
-                    <table className="min-w-full text-left text-sm whitespace-nowrap">
+                    <table className="min-w-full text-left text-sm whitespace-nowrap select-none">
                       <thead className="bg-slate-100 border-b-2 border-slate-900 font-bold uppercase tracking-wider text-slate-600">
                         <tr>
-                          <th scope="col" className="px-6 py-4">填寫時間</th>
-                          <th scope="col" className="px-6 py-4">招生區</th>
-                          <th scope="col" className="px-6 py-4">身分</th>
-                          <th scope="col" className="px-6 py-4">會考年度</th>
-                          <th scope="col" className="px-6 py-4">各科會考成績</th>
+                          <th scope="col" className="px-6 py-4 cursor-pointer hover:bg-slate-200 transition-colors" onClick={() => handleSort('timestamp')}>
+                            填寫時間 {renderSortIcon('timestamp')}
+                          </th>
+                          <th scope="col" className="px-6 py-4 cursor-pointer hover:bg-slate-200 transition-colors" onClick={() => handleSort('region')}>
+                            招生區 {renderSortIcon('region')}
+                          </th>
+                          <th scope="col" className="px-6 py-4 cursor-pointer hover:bg-slate-200 transition-colors" onClick={() => handleSort('identity')}>
+                            身分 {renderSortIcon('identity')}
+                          </th>
+                          <th scope="col" className="px-6 py-4 cursor-pointer hover:bg-slate-200 transition-colors" onClick={() => handleSort('examYear')}>
+                            會考年度 {renderSortIcon('examYear')}
+                          </th>
+                          <th scope="col" className="px-6 py-4 cursor-pointer hover:bg-slate-200 transition-colors" onClick={() => handleSort('totalScore')}>
+                            各科會考成績 (依總積分排序) {renderSortIcon('totalScore')}
+                          </th>
                           {activeTab === 'full' && (
                             <>
                               <th scope="col" className="px-6 py-4">比率區間</th>
@@ -764,92 +915,121 @@ export default function Admin() {
             <div className="bg-white border-2 border-slate-900 p-6 sm:p-8 shadow-[4px_4px_0_#0F172A]">
               <div className="flex items-center justify-between mb-6 pb-2 border-b-2 border-slate-100">
                 <h3 className="text-xl font-bold flex items-center">自訂問卷題目</h3>
-                <button 
-                  onClick={addCustomQuestion}
-                  className="px-4 py-2 bg-slate-900 text-white font-bold text-sm hover:bg-slate-800 transition-colors shadow-[2px_2px_0_#34D399]"
-                >
-                  + 新增題目
-                </button>
+                <div className="flex gap-2">
+                  <button 
+                    onClick={() => setShowPreviewModal(true)}
+                    className="px-4 py-2 border-2 border-slate-900 bg-white text-slate-900 font-bold text-sm flex items-center justify-center gap-2 shadow-[2px_2px_0_#0F172A] hover:translate-y-0.5 hover:shadow-none transition-all"
+                  >
+                    <Eye className="w-4 h-4" />
+                    <span className="hidden sm:inline">表單預覽</span>
+                  </button>
+                  <button 
+                    onClick={addCustomQuestion}
+                    className="px-4 py-2 bg-slate-900 text-white font-bold text-sm hover:bg-slate-800 transition-colors shadow-[2px_2px_0_#34D399]"
+                  >
+                    + 新增題目
+                  </button>
+                </div>
               </div>
               
               <div className="space-y-6">
                 {customQuestions.map((q, idx) => (
-                  <div key={q.id} className="p-4 border-2 border-slate-200 bg-slate-50 relative">
-                    <button 
-                      onClick={() => removeQuestion(q.id)}
-                      className="absolute top-4 right-4 text-red-500 font-bold text-sm hover:underline"
-                    >
-                      移除
-                    </button>
-                    <div className="flex flex-col sm:flex-row gap-4 mb-4 pr-12">
-                      <div className="flex-1">
-                        <label className="block font-bold text-slate-700 mb-1 text-sm">題目</label>
-                        <input 
-                          type="text" 
-                          value={q.question} 
-                          onChange={(e) => updateQuestion(q.id, { question: e.target.value })}
-                          className="w-full border-2 border-slate-300 p-2 focus:border-slate-900 focus:outline-none"
-                          placeholder="請輸入題目"
-                        />
+                  <div key={q.id} className="relative group">
+                    <div className="absolute inset-0 bg-slate-900 translate-x-1.5 translate-y-1.5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none border-2 border-slate-900"></div>
+                    <div className="bg-white border-2 border-slate-900 p-5 sm:p-6 relative z-10 hover:-translate-y-0.5 hover:-translate-x-0.5 transition-transform duration-200">
+                      <button 
+                        onClick={() => removeQuestion(q.id)}
+                        className="absolute top-4 right-4 text-rose-500 font-bold text-sm border-2 border-transparent hover:border-rose-200 hover:bg-rose-50 px-2 py-1 rounded transition-colors"
+                      >
+                        移除
+                      </button>
+                      <div className="flex flex-col sm:flex-row gap-4 mb-4 pr-12">
+                        <div className="flex-1">
+                          <label className="block font-black text-slate-900 mb-2 tracking-wide text-sm flex items-center">
+                            <span className="w-1.5 h-3 bg-slate-900 mr-2 inline-block"></span>
+                            題目 {idx + 1}
+                          </label>
+                          <input 
+                            type="text" 
+                            value={q.question} 
+                            onChange={(e) => updateQuestion(q.id, { question: e.target.value })}
+                            className="w-full border-2 border-slate-300 p-3 font-bold focus:border-slate-900 focus:outline-none focus:shadow-[4px_4px_0_#0F172A] transition-all"
+                            placeholder="請輸入題目"
+                          />
+                        </div>
+                        <div className="w-full sm:w-48">
+                          <label className="block font-black text-slate-900 mb-2 tracking-wide text-sm flex items-center">
+                            <span className="w-1.5 h-3 bg-slate-900 mr-2 inline-block"></span>
+                            題型
+                          </label>
+                          <select 
+                            value={q.type} 
+                            onChange={(e) => updateQuestion(q.id, { type: e.target.value })}
+                            className="w-full border-2 border-slate-300 p-3 font-bold bg-white focus:border-slate-900 focus:outline-none focus:shadow-[4px_4px_0_#0F172A] transition-all cursor-pointer"
+                          >
+                            <option value="text">簡答題</option>
+                            <option value="radio">單選題</option>
+                            <option value="checkbox">多選題</option>
+                          </select>
+                        </div>
                       </div>
-                      <div className="w-full sm:w-48">
-                        <label className="block font-bold text-slate-700 mb-1 text-sm">題型</label>
-                        <select 
-                          value={q.type} 
-                          onChange={(e) => updateQuestion(q.id, { type: e.target.value })}
-                          className="w-full border-2 border-slate-300 p-2 bg-white focus:border-slate-900 focus:outline-none"
-                        >
-                          <option value="text">簡答題</option>
-                          <option value="radio">單選題</option>
-                          <option value="checkbox">多選題</option>
-                        </select>
+                      
+                      {(q.type === 'radio' || q.type === 'checkbox') && (
+                        <div className="mb-4">
+                          <label className="block font-black text-slate-900 mb-2 tracking-wide text-sm flex items-center">
+                            <span className="w-1.5 h-3 bg-slate-900 mr-2 inline-block"></span>
+                            選項 <span className="text-slate-500 font-medium ml-2 text-xs">(以逗號分隔)</span>
+                          </label>
+                          <input 
+                            type="text" 
+                            value={q.options ? q.options.join(',') : ''} 
+                            onChange={(e) => updateQuestion(q.id, { options: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })}
+                            className="w-full border-2 border-slate-300 p-3 font-bold focus:border-slate-900 focus:outline-none focus:shadow-[4px_4px_0_#0F172A] transition-all"
+                            placeholder="例如: 選項A,選項B,選項C"
+                          />
+                        </div>
+                      )}
+                      
+                      <div className="flex flex-col sm:flex-row gap-4 mb-4">
+                        <div className="flex-1">
+                          <label className="block font-black text-slate-900 mb-2 tracking-wide text-sm flex items-center">
+                            <span className="w-1.5 h-3 bg-slate-400 mr-2 inline-block"></span>
+                            開放填寫開始時間 <span className="text-slate-400 font-medium ml-2 text-xs">(選填)</span>
+                          </label>
+                          <input 
+                            type="datetime-local" 
+                            value={q.startTime || ''} 
+                            onChange={(e) => updateQuestion(q.id, { startTime: e.target.value })}
+                            className="w-full border-2 border-slate-300 p-3 font-bold text-slate-700 focus:border-slate-900 focus:outline-none focus:shadow-[4px_4px_0_#0F172A] transition-all"
+                          />
+                        </div>
+                        <div className="flex-1">
+                          <label className="block font-black text-slate-900 mb-2 tracking-wide text-sm flex items-center">
+                            <span className="w-1.5 h-3 bg-slate-400 mr-2 inline-block"></span>
+                            開放填寫結束時間 <span className="text-slate-400 font-medium ml-2 text-xs">(選填)</span>
+                          </label>
+                          <input 
+                            type="datetime-local" 
+                            value={q.endTime || ''} 
+                            onChange={(e) => updateQuestion(q.id, { endTime: e.target.value })}
+                            className="w-full border-2 border-slate-300 p-3 font-bold text-slate-700 focus:border-slate-900 focus:outline-none focus:shadow-[4px_4px_0_#0F172A] transition-all"
+                          />
+                        </div>
                       </div>
-                    </div>
-                    
-                    {(q.type === 'radio' || q.type === 'checkbox') && (
-                      <div className="mb-4">
-                        <label className="block font-bold text-slate-700 mb-1 text-sm">選項 (以逗號分隔)</label>
-                        <input 
-                          type="text" 
-                          value={q.options ? q.options.join(',') : ''} 
-                          onChange={(e) => updateQuestion(q.id, { options: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })}
-                          className="w-full border-2 border-slate-300 p-2 focus:border-slate-900 focus:outline-none"
-                          placeholder="例如: 選項A,選項B,選項C"
-                        />
-                      </div>
-                    )}
-                    
-                    <div className="flex flex-col sm:flex-row gap-4 mb-4">
-                      <div className="flex-1">
-                        <label className="block font-bold text-slate-700 mb-1 text-sm">開放填寫開始時間 (選填)</label>
-                        <input 
-                          type="datetime-local" 
-                          value={q.startTime || ''} 
-                          onChange={(e) => updateQuestion(q.id, { startTime: e.target.value })}
-                          className="w-full border-2 border-slate-300 p-2 focus:border-slate-900 focus:outline-none"
-                        />
-                      </div>
-                      <div className="flex-1">
-                        <label className="block font-bold text-slate-700 mb-1 text-sm">開放填寫結束時間 (選填)</label>
-                        <input 
-                          type="datetime-local" 
-                          value={q.endTime || ''} 
-                          onChange={(e) => updateQuestion(q.id, { endTime: e.target.value })}
-                          className="w-full border-2 border-slate-300 p-2 focus:border-slate-900 focus:outline-none"
-                        />
-                      </div>
-                    </div>
 
-                    <div>
-                      <label className="flex items-center cursor-pointer">
-                        <input 
-                          type="checkbox" 
-                          checked={q.required} 
-                          onChange={(e) => updateQuestion(q.id, { required: e.target.checked })}
-                          className="w-4 h-4 mr-2"
-                        />
-                        <span className="font-bold text-sm">必填</span>
-                      </label>
+                      <div className="mt-6 pt-4 border-t-2 border-slate-100">
+                        <label className="flex items-center cursor-pointer inline-flex">
+                          <div className="relative flex items-center">
+                            <input 
+                              type="checkbox" 
+                              checked={q.required} 
+                              onChange={(e) => updateQuestion(q.id, { required: e.target.checked })}
+                              className="w-5 h-5 border-2 border-slate-300 rounded text-slate-900 focus:ring-slate-900 focus:ring-2 cursor-pointer transition-all"
+                            />
+                          </div>
+                          <span className="ml-3 font-black text-sm tracking-wide text-slate-900">此題為必填項目</span>
+                        </label>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -957,6 +1137,205 @@ export default function Admin() {
 
       </div>
       
+      {showPreviewModal && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-white border-4 border-slate-900 w-full max-w-3xl my-8 relative shadow-[12px_12px_0_#0F172A] animate-in fade-in zoom-in-95">
+            <button 
+              onClick={() => setShowPreviewModal(false)}
+              className="absolute -top-4 -right-4 w-10 h-10 bg-rose-400 border-2 border-slate-900 flex items-center justify-center rounded-none shadow-[2px_2px_0_#0F172A] hover:translate-y-0.5 hover:shadow-none transition-all z-10"
+            >
+              <X className="w-6 h-6 text-slate-900" />
+            </button>
+            <div className="p-6 border-b-2 border-slate-900 bg-emerald-400">
+              <h2 className="text-xl sm:text-2xl font-black text-slate-900 uppercase tracking-widest flex items-center">
+                表單預覽
+              </h2>
+            </div>
+            
+            <div className="p-6 sm:p-10 max-h-[75vh] overflow-y-auto bg-slate-50 grid-pattern">
+              
+              <div className="max-w-2xl mx-auto space-y-8">
+                
+                {/* System Status Card */}
+                <div className="bg-white border-2 border-slate-900 p-6 sm:p-8 relative group">
+                  <div className="absolute inset-0 bg-indigo-500 translate-x-2 translate-y-2 -z-10 border-2 border-slate-900 pointer-events-none"></div>
+                  
+                  <div className="flex items-center justify-between mb-6 pb-4 border-b-2 border-slate-100">
+                    <h3 className="text-xl font-black flex items-center text-slate-900 uppercase tracking-widest">
+                      <LayoutDashboard className="w-6 h-6 mr-3 text-indigo-500" />
+                      系統狀態與排程
+                    </h3>
+                    <div className={`px-4 py-1.5 border-2 border-slate-900 font-bold text-sm flex items-center ${systemEnabled ? 'bg-emerald-100 text-emerald-900' : 'bg-rose-100 text-rose-900'}`}>
+                      <span className={`w-2 h-2 rounded-full mr-2 ${systemEnabled ? 'bg-emerald-500' : 'bg-rose-500'} animate-pulse`}></span>
+                      {systemEnabled ? '系統開放中' : '系統已停用'}
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
+                    <div className="bg-slate-50 border-2 border-slate-200 p-4">
+                      <p className="text-xs font-black text-slate-400 mb-2 uppercase tracking-widest">序位公告時間</p>
+                      <p className="font-bold text-slate-900 text-sm">
+                        {announcementDate ? new Date(announcementDate).toLocaleString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '未設定'}
+                      </p>
+                    </div>
+                    
+                    <div className="bg-slate-50 border-2 border-slate-200 p-4">
+                      <p className="text-xs font-black text-slate-400 mb-2 uppercase tracking-widest">系統總開放期間</p>
+                      <p className="font-bold text-slate-900 text-sm leading-tight">
+                        <span className="text-slate-500 inline-block w-6">起</span> {systemStartTime ? new Date(systemStartTime).toLocaleString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '不限'}<br/>
+                        <span className="text-slate-500 inline-block w-6 text-xs mt-1">迄</span> {systemEndTime ? new Date(systemEndTime).toLocaleString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '不限'}
+                      </p>
+                    </div>
+                    
+                    <div className="bg-slate-50 border-2 border-slate-200 p-4 md:col-span-2">
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest">會考成績選填期間</p>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 uppercase border-2 ${subjectScoreEnabled ? 'bg-indigo-100 border-indigo-200 text-indigo-700' : 'bg-rose-100 border-rose-200 text-rose-700'}`}>
+                          {subjectScoreEnabled ? '開放中' : '已停用'}
+                        </span>
+                      </div>
+                      
+                      {!subjectScoreEnabled ? (
+                        <p className="font-bold text-slate-400 text-sm italic">成績選填功能已關閉</p>
+                      ) : (
+                        <div className="flex flex-col sm:flex-row gap-4">
+                          <div className="flex-1">
+                            <span className="text-slate-400 text-xs font-bold mr-2">START</span>
+                            <span className="font-bold text-slate-900 text-sm">{subjectScoreStartTime ? new Date(subjectScoreStartTime).toLocaleString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '不限'}</span>
+                          </div>
+                          <div className="flex-1">
+                            <span className="text-slate-400 text-xs font-bold mr-2">END</span>
+                            <span className="font-bold text-slate-900 text-sm">{subjectScoreEndTime ? new Date(subjectScoreEndTime).toLocaleString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '不限'}</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Custom Questions Section */}
+                <div>
+                  <div className="flex items-center justify-center mb-8 relative">
+                    <div className="absolute inset-0 flex items-center">
+                      <div className="w-full border-t-2 border-slate-300 border-dashed"></div>
+                    </div>
+                    <div className="relative bg-slate-50 px-4">
+                      <h3 className="text-lg font-black text-slate-900 uppercase tracking-widest flex items-center">
+                        <span className="w-3 h-3 bg-emerald-400 border-2 border-slate-900 mr-3"></span>
+                        自訂問卷預覽
+                        <span className="w-3 h-3 bg-emerald-400 border-2 border-slate-900 ml-3"></span>
+                      </h3>
+                    </div>
+                  </div>
+                  
+                  {customQuestions.length === 0 ? (
+                    <div className="text-center py-16 bg-white outline-dashed outline-2 outline-slate-300 text-slate-400 font-bold border-2 border-white shadow-sm">
+                      <ClipboardList className="w-12 h-12 mx-auto mb-4 text-slate-300" />
+                      目前尚未新增任何自訂題目
+                    </div>
+                  ) : (
+                    <div className="space-y-6">
+                      {customQuestions.map((q, idx) => (
+                        <div key={q.id} className="relative group">
+                          <div className="absolute inset-0 bg-emerald-400 translate-x-1.5 translate-y-1.5 -z-10 border-2 border-slate-900 pointer-events-none"></div>
+                          <div className="bg-white border-2 border-slate-900 p-6 sm:p-8 relative z-10 hover:-translate-y-0.5 hover:-translate-x-0.5 transition-transform duration-200">
+                            
+                            <div className="flex items-start justify-between mb-4">
+                              <label className="text-base sm:text-lg font-black text-slate-900 flex items-start tracking-wide">
+                                <span className="text-emerald-500 mr-2 mt-0.5">{String(idx + 1).padStart(2, '0')}.</span>
+                                <span className="leading-tight pt-1">{q.question}</span>
+                                {q.required && <span className="text-rose-500 ml-2 mt-1 text-2xl leading-none">*</span>}
+                              </label>
+                            </div>
+                            
+                            {(q.startTime || q.endTime) && (
+                              <div className="bg-amber-50 border-l-4 border-amber-400 p-3 mb-5 text-xs font-bold text-amber-800 flex items-center">
+                                <Calendar className="w-4 h-4 mr-2 text-amber-500 flex-shrink-0" />
+                                <div>
+                                  <span className="uppercase tracking-wider opacity-75 mr-1">Time Limit:</span>
+                                  {q.startTime && <span>{new Date(q.startTime).toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })} 起</span>}
+                                  {q.startTime && q.endTime && <span className="mx-1">~</span>}
+                                  {q.endTime && <span>{new Date(q.endTime).toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })} 止</span>}
+                                </div>
+                              </div>
+                            )}
+                            
+                            <div className="mt-4">
+                              {q.type === 'text' && (
+                                <input 
+                                  type="text" 
+                                  value={previewAnswers[q.id] || ''} 
+                                  onChange={(e) => handlePreviewAnswerChange(q.id, e.target.value, 'text')}
+                                  className="w-full border-2 border-slate-300 p-4 font-bold text-slate-900 focus:border-slate-900 focus:outline-none focus:shadow-[4px_4px_0_#0F172A] transition-all bg-slate-50 focus:bg-white placeholder:text-slate-400"
+                                  placeholder="請輸入您的回答..."
+                                />
+                              )}
+                              
+                              {q.type === 'radio' && q.options && (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                  {q.options.map((opt: string, i: number) => (
+                                    <label key={i} className={`flex items-center p-4 border-2 cursor-pointer transition-all ${previewAnswers[q.id] === opt ? 'border-slate-900 bg-emerald-50 shadow-[2px_2px_0_#0F172A]' : 'border-slate-200 hover:border-slate-400 bg-white'}`}>
+                                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center mr-3 flex-shrink-0 ${previewAnswers[q.id] === opt ? 'border-slate-900' : 'border-slate-300'}`}>
+                                        {previewAnswers[q.id] === opt && <div className="w-2.5 h-2.5 bg-slate-900 rounded-full"></div>}
+                                      </div>
+                                      <input 
+                                        type="radio" 
+                                        name={q.id} 
+                                        value={opt}
+                                        checked={previewAnswers[q.id] === opt}
+                                        onChange={(e) => handlePreviewAnswerChange(q.id, e.target.value, 'radio')}
+                                        className="sr-only"
+                                      />
+                                      <span className={`font-bold ${previewAnswers[q.id] === opt ? 'text-slate-900' : 'text-slate-600'}`}>{opt}</span>
+                                    </label>
+                                  ))}
+                                </div>
+                              )}
+
+                              {q.type === 'checkbox' && q.options && (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                  {q.options.map((opt: string, i: number) => (
+                                    <label key={i} className={`flex items-center p-4 border-2 cursor-pointer transition-all ${(previewAnswers[q.id] || []).includes(opt) ? 'border-slate-900 bg-emerald-50 shadow-[2px_2px_0_#0F172A]' : 'border-slate-200 hover:border-slate-400 bg-white'}`}>
+                                      <div className={`w-5 h-5 rounded border-2 flex items-center justify-center mr-3 flex-shrink-0 ${((previewAnswers[q.id] || []).includes(opt)) ? 'border-slate-900 bg-slate-900' : 'border-slate-300'}`}>
+                                        {((previewAnswers[q.id] || []).includes(opt)) && (
+                                          <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={4}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                          </svg>
+                                        )}
+                                      </div>
+                                      <input 
+                                        type="checkbox" 
+                                        checked={(previewAnswers[q.id] || []).includes(opt)}
+                                        onChange={() => handlePreviewAnswerChange(q.id, opt, 'checkbox')}
+                                        className="sr-only"
+                                      />
+                                      <span className={`font-bold ${((previewAnswers[q.id] || []).includes(opt)) ? 'text-slate-900' : 'text-slate-600'}`}>{opt}</span>
+                                    </label>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+            
+            <div className="p-6 border-t-2 border-slate-900 bg-slate-50 flex justify-end">
+              <button 
+                onClick={() => setShowPreviewModal(false)}
+                className="px-6 py-2 bg-slate-900 text-white font-bold border-2 border-slate-900 shadow-[4px_4px_0_#0F172A] hover:translate-y-0.5 hover:translate-x-0.5 hover:shadow-[2px_2px_0_#0F172A] transition-all"
+              >
+                關閉預覽
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Footer / Copyright */}
       <footer className="mt-12 py-8 border-t-2 border-slate-200 text-center">
         <p className="text-slate-500 font-bold text-sm tracking-wider">
