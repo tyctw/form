@@ -4,7 +4,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   PieChart, Pie, Cell
 } from 'recharts';
-import { Lock, LayoutDashboard, Users, MapPin, Loader2, Download, Table, ClipboardList, Calendar } from 'lucide-react';
+import { Lock, LayoutDashboard, Users, MapPin, Loader2, Download, Table, ClipboardList, Calendar, LogOut } from 'lucide-react';
 import { Header } from '../components/Header';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
@@ -297,31 +297,44 @@ export default function Admin() {
     URL.revokeObjectURL(url);
   };
 
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    setData([]);
+    setFullDataList([]);
+    setSkipDataList([]);
+  };
+
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
-        <div className="bg-white border-4 border-slate-900 shadow-[8px_8px_0_#0F172A] p-6 sm:p-8 max-w-sm w-full animate-in fade-in zoom-in">
-          <div className="flex justify-center mb-6">
-            <div className="w-16 h-16 bg-slate-900 flex items-center justify-center rounded-full text-white">
-              <Lock className="w-8 h-8" />
+      <div className="min-h-[100dvh] bg-slate-100 font-sans flex flex-col relative w-full pt-16 sm:pt-24 pb-12">
+        <Header onShareClick={() => {}} />
+        <div className="flex-1 w-full flex flex-col items-center justify-center p-4 mx-auto my-auto mt-8 sm:mt-16">
+          <div className="bg-white border-4 border-slate-900 shadow-[8px_8px_0_#0F172A] p-6 sm:p-8 max-w-sm w-full animate-in fade-in zoom-in relative z-10">
+            <div className="flex justify-center mb-6">
+              <div className="w-16 h-16 bg-slate-900 flex items-center justify-center rounded-full text-white">
+                <Lock className="w-8 h-8" />
+              </div>
             </div>
+            <h2 className="text-xl sm:text-2xl font-black text-center mb-6">系統管理員登入</h2>
+            <form onSubmit={handleLogin} className="space-y-4">
+              <div>
+                <input
+                  type="password"
+                  placeholder="請輸入管理密碼 (預設: admin123)"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  className="w-full border-2 border-slate-300 p-3 font-bold focus:border-slate-900 focus:outline-none text-sm sm:text-base"
+                />
+              </div>
+              {error && <p className="text-red-500 font-bold text-sm tracking-wide">{error}</p>}
+              <button type="submit" className="w-full bg-emerald-400 border-2 border-slate-900 py-3 font-black text-slate-900 shadow-[4px_4px_0_#0F172A] hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-all">
+                登入系統
+              </button>
+            </form>
           </div>
-          <h2 className="text-xl sm:text-2xl font-black text-center mb-6">系統管理員登入</h2>
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div>
-              <input
-                type="password"
-                placeholder="請輸入管理密碼 (預設: admin123)"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                className="w-full border-2 border-slate-300 p-3 font-bold focus:border-slate-900 focus:outline-none text-sm sm:text-base"
-              />
-            </div>
-            {error && <p className="text-red-500 font-bold text-sm tracking-wide">{error}</p>}
-            <button type="submit" className="w-full bg-emerald-400 border-2 border-slate-900 py-3 font-black text-slate-900 shadow-[4px_4px_0_#0F172A] hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-all">
-              登入系統
-            </button>
-          </form>
+          <div className="mt-8 text-slate-500 text-sm font-bold tracking-wider relative z-10">
+            &copy; 2026 全國會考分析系統 版權所有
+          </div>
         </div>
       </div>
     );
@@ -368,6 +381,14 @@ export default function Admin() {
               className="flex-1 sm:flex-none px-4 py-2 border-2 border-slate-900 bg-white font-bold hover:bg-slate-100 flex items-center justify-center gap-2 shadow-[2px_2px_0_#0F172A] hover:translate-y-0.5 hover:shadow-none transition-all"
             >
               {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : '重新載入'}
+            </button>
+            <button 
+              onClick={handleLogout} 
+              className="flex-1 sm:flex-none px-4 py-2 border-2 border-slate-900 bg-rose-400 font-bold flex items-center justify-center gap-2 shadow-[2px_2px_0_#0F172A] hover:translate-y-0.5 hover:shadow-none transition-all text-slate-900"
+            >
+              <LogOut className="w-5 h-5 flex-shrink-0" />
+              <span className="hidden sm:inline">登出系統</span>
+              <span className="sm:hidden">登出</span>
             </button>
           </div>
         </div>
@@ -935,6 +956,13 @@ export default function Admin() {
         )}
 
       </div>
+      
+      {/* Footer / Copyright */}
+      <footer className="mt-12 py-8 border-t-2 border-slate-200 text-center">
+        <p className="text-slate-500 font-bold text-sm tracking-wider">
+          &copy; 2026 全國會考分析系統 版權所有 All Rights Reserved.
+        </p>
+      </footer>
     </div>
   );
 }
