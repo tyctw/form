@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
+import { Link } from 'react-router-dom';
 import { Header } from '../components/Header';
 import { 
   Building2, 
@@ -921,9 +922,9 @@ export default function Home() {
             <p className="text-slate-400 text-xs font-bold mt-1">非政府官方架設，由民間團隊營運</p>
           </div>
           <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6 text-sm font-bold text-slate-300">
-            <a href="#/admin" className="hover:text-emerald-400 transition-colors">
+            <Link to="/admin" className="hover:text-emerald-400 transition-colors">
               管理員頁面
-            </a>
+            </Link>
             <button role="button" type="button" onClick={() => setShowShareModal(true)} className="hover:text-emerald-400 transition-colors">
               分享系統
             </button>
