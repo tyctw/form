@@ -19,14 +19,14 @@ export function Header({ onShareClick }: { onShareClick?: () => void }) {
   return (
     <>
       <header className="bg-white/90 backdrop-blur-md text-slate-900 px-4 sm:px-8 py-3 items-center fixed top-0 w-full z-40 border-b-[3px] border-slate-900 flex justify-between flex-none transition-all duration-300">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 geometric-card bg-slate-900 text-white flex items-center justify-center font-extrabold text-base tracking-wider rounded-sm rotate-2 hover:rotate-0 transition-transform">
+        <a href="#/" className="flex items-center gap-3 cursor-pointer group">
+          <div className="w-10 h-10 geometric-card bg-slate-900 text-white flex items-center justify-center font-extrabold text-base tracking-wider rounded-sm rotate-2 group-hover:rotate-0 transition-transform">
             115
           </div>
-          <div className="font-extrabold text-lg sm:text-xl tracking-widest text-slate-900">
+          <div className="font-extrabold text-lg sm:text-xl tracking-widest text-slate-900 group-hover:text-slate-700 transition-colors">
             全國會考分析系統
           </div>
-        </div>
+        </a>
         
         {/* Action Buttons */}
         <div className="flex items-center gap-3">
