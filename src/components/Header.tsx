@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { Menu, X, ExternalLink, Instagram, Share2 } from 'lucide-react';
-import { Link } from 'react-router-dom';
 
 // Custom SVG path for Threads since it's not standard in lucide-react
 const ThreadsIcon = ({ className }: { className?: string }) => (
@@ -20,14 +19,14 @@ export function Header({ onShareClick }: { onShareClick?: () => void }) {
   return (
     <>
       <header className="bg-white/90 backdrop-blur-md text-slate-900 px-4 sm:px-8 py-3 items-center fixed top-0 w-full z-40 border-b-[3px] border-slate-900 flex justify-between flex-none transition-all duration-300">
-        <Link to="/" className="flex items-center gap-3 cursor-pointer group">
-          <div className="w-10 h-10 geometric-card bg-slate-900 text-white flex items-center justify-center font-extrabold text-base tracking-wider rounded-sm rotate-2 group-hover:rotate-0 transition-transform">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 geometric-card bg-slate-900 text-white flex items-center justify-center font-extrabold text-base tracking-wider rounded-sm rotate-2 hover:rotate-0 transition-transform">
             115
           </div>
-          <div className="font-extrabold text-lg sm:text-xl tracking-widest text-slate-900 group-hover:text-slate-700 transition-colors">
+          <div className="font-extrabold text-lg sm:text-xl tracking-widest text-slate-900">
             全國會考分析系統
           </div>
-        </Link>
+        </div>
         
         {/* Action Buttons */}
         <div className="flex items-center gap-3">
