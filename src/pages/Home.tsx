@@ -911,26 +911,76 @@ export default function Home() {
       )}
 
       {/* Footer */}
-      <footer className="bg-slate-900 border-t-8 border-emerald-400 py-12 px-4 sm:px-6 lg:px-8 mt-12 relative z-10">
-        <div className="max-w-4xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
-          <div className="flex flex-col items-center md:items-start gap-1">
-            <div className="flex items-center gap-2 text-white font-black text-xl tracking-tight">
-              <Atom className="w-6 h-6 text-emerald-400" />
-              <span>全國會考分析系統</span>
+      <footer className="bg-slate-900 border-t-8 border-emerald-400 pt-16 pb-8 px-4 sm:px-6 lg:px-8 mt-12 relative z-10 overflow-hidden">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-slate-800 rounded-full blur-3xl opacity-50 -translate-y-1/2 translate-x-1/3"></div>
+        <div className="absolute bottom-0 left-0 w-48 h-48 bg-slate-800 rounded-full blur-3xl opacity-50 translate-y-1/2 -translate-x-1/4"></div>
+
+        <div className="max-w-5xl mx-auto relative z-10">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-12 mb-12">
+            <div className="flex flex-col items-center md:items-start col-span-1 md:col-span-1">
+              <div className="flex items-center gap-3 text-white font-black text-xl tracking-tight mb-4">
+                <div className="w-10 h-10 bg-emerald-400 flex items-center justify-center -rotate-6 shadow-[2px_2px_0_#34D399] border-2 border-transparent">
+                  <Atom className="w-6 h-6 text-slate-900" />
+                </div>
+                <span>全國會考分析系統</span>
+              </div>
+              <p className="text-slate-400 text-sm font-bold text-center md:text-left leading-relaxed">
+                一個致力於提供準確、客觀的會考落點分析平台。<br/>
+                幫助學生做出最好的升學決策。
+              </p>
+              <div className="mt-6 inline-block bg-slate-800 text-slate-300 text-xs font-black uppercase tracking-widest px-3 py-1.5 border border-slate-700">
+                非政府官方架設
+              </div>
             </div>
-            <p className="text-slate-400 text-xs font-bold mt-1">非政府官方架設，由民間團隊營運</p>
+
+            <div className="flex flex-col items-center md:items-start">
+              <h4 className="text-white font-black text-lg tracking-widest mb-6 flex items-center">
+                <span className="w-2 h-2 bg-rose-400 mr-2"></span>
+                快速連結
+              </h4>
+              <ul className="space-y-4 text-sm font-bold text-slate-400 text-center md:text-left w-full">
+                <li>
+                  <button onClick={() => setShowShareModal(true)} className="hover:text-emerald-400 hover:translate-x-1 transition-all flex items-center justify-center md:justify-start w-full group">
+                    分享系統 <ArrowRight className="w-4 h-4 ml-2 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </button>
+                </li>
+                <li>
+                  <button onClick={() => setShowHelpModal(true)} className="hover:text-emerald-400 hover:translate-x-1 transition-all flex items-center justify-center md:justify-start w-full group">
+                    使用說明 <ArrowRight className="w-4 h-4 ml-2 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </button>
+                </li>
+              </ul>
+            </div>
+
+            <div className="flex flex-col items-center md:items-start">
+              <h4 className="text-white font-black text-lg tracking-widest mb-6 flex items-center">
+                <span className="w-2 h-2 bg-sky-400 mr-2"></span>
+                服務條款
+              </h4>
+              <ul className="space-y-4 text-sm font-bold text-slate-400 text-center md:text-left w-full">
+                <li>
+                  <button onClick={() => setShowPrivacyModal(true)} className="hover:text-emerald-400 hover:translate-x-1 transition-all flex items-center justify-center md:justify-start w-full group">
+                    隱私權政策 <ArrowRight className="w-4 h-4 ml-2 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </button>
+                </li>
+                <li>
+                  <a href="mailto:contact@example.com" className="hover:text-emerald-400 hover:translate-x-1 transition-all flex items-center justify-center md:justify-start w-full group">
+                    聯絡我們 <ArrowRight className="w-4 h-4 ml-2 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </a>
+                </li>
+              </ul>
+            </div>
           </div>
-          <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6 text-sm font-bold text-slate-300">
-            <button role="button" type="button" onClick={() => setShowShareModal(true)} className="hover:text-emerald-400 transition-colors">
-              分享系統
-            </button>
-            <button role="button" type="button" onClick={() => setShowPrivacyModal(true)} className="hover:text-emerald-400 transition-colors">
-              隱私權政策
-            </button>
-            <a href="mailto:contact@example.com" className="hover:text-emerald-400 transition-colors">
-              聯絡我們
-            </a>
-            <p className="text-slate-500">&copy; 2026 全國會考分析系統 版權所有 All Rights Reserved.</p>
+
+          <div className="w-full h-px bg-slate-800 mb-8"></div>
+
+          <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-xs font-bold text-slate-500 tracking-wider">
+            <p className="flex items-center">
+               <span className="text-slate-400 mr-2">&copy;</span> {new Date().getFullYear()} 全國會考分析系統 . All Rights Reserved.
+            </p>
+            <p className="flex items-center gap-2">
+              Designed with <span className="text-rose-500 animate-pulse">♥</span> in Taiwan
+            </p>
           </div>
         </div>
       </footer>
