@@ -39,7 +39,7 @@ import { CustomQuestion, QuestionnaireData, SubjectScore, EssayScoreType } from 
 const REGIONS = [
   "基北區", "桃聯區", "竹苗區", "中投區", "彰化區", 
   "雲林區", "嘉義區", "台南區", "高雄區", "屏東區", 
-  "宜蘭區", "花蓮區", "台東區", "澎湖區", "金門區", "其他"
+  "宜蘭區", "花蓮區", "台東區", "澎湖區", "金門區"
 ];
 const EXAM_YEARS = ["115", "114", "113", "112", "111", "110"];
 const IDENTITIES = ["學生", "家長", "老師", "補教業"];
@@ -112,7 +112,9 @@ export default function Home() {
         const { data } = await supabase.from('survey_config').select('*').limit(1).maybeSingle();
         if (data) {
           if (data.announcement_date) setAnnouncementDate(data.announcement_date);
-          if (data.custom_questions) setCustomQuestions(data.custom_questions);
+          if (data.custom_questions) {
+            setCustomQuestions(data.custom_questions.filter((q: any) => q.id !== '__SYSTEM_BACKUPS__'));
+          }
           if (data.subject_score_start_time) setSubjectScoreStartTime(data.subject_score_start_time);
           if (data.subject_score_end_time) setSubjectScoreEndTime(data.subject_score_end_time);
           if (data.subject_score_enabled !== undefined && data.subject_score_enabled !== null) setSubjectScoreEnabled(data.subject_score_enabled);
@@ -444,8 +446,10 @@ export default function Home() {
                   </button>
                   <button
                     onClick={() => {
-                      setIsSuccess(false);
-                      setInviteResult(null);
+                      if (window.confirm('確定要返回填寫嗎？您目前的專屬邀請碼將會遺失！\n建議您先複製或截圖保存。')) {
+                        setIsSuccess(false);
+                        setInviteResult(null);
+                      }
                     }}
                     className="w-full text-slate-400 hover:text-white font-medium text-sm transition-colors mt-4 py-2"
                   >
