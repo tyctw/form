@@ -367,8 +367,13 @@ export default function Admin() {
               </button>
             </form>
           </div>
-          <div className="mt-8 text-slate-500 text-sm font-bold tracking-wider relative z-10">
-            &copy; 2026 全國會考分析系統 版權所有
+          <div className="mt-8 text-slate-500 text-xs font-bold tracking-widest relative z-10 flex flex-col items-center gap-2">
+            <p>
+              &copy; {new Date().getFullYear()} 全國會考分析系統 版權所有
+            </p>
+            <p className="flex items-center gap-1">
+              DESIGNED WITH <span className="text-rose-500 animate-pulse">♥</span> IN TAIWAN
+            </p>
           </div>
         </div>
       </div>
@@ -1337,10 +1342,21 @@ export default function Admin() {
       )}
 
       {/* Footer / Copyright */}
-      <footer className="mt-12 py-8 border-t-2 border-slate-200 text-center">
-        <p className="text-slate-500 font-bold text-sm tracking-wider">
-          &copy; 2026 全國會考分析系統 版權所有 All Rights Reserved.
-        </p>
+      <footer className="mt-12 py-10 border-t-2 border-slate-900 bg-slate-900 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-slate-800 rounded-full blur-3xl opacity-50 -translate-y-1/2 translate-x-1/3"></div>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-emerald-400 flex items-center justify-center -rotate-6 shadow-[2px_2px_0_#34D399]">
+              <Lock className="w-4 h-4 text-slate-900" />
+            </div>
+            <p className="text-white font-black tracking-widest text-sm">管理員作業系統</p>
+          </div>
+          <p className="text-slate-400 font-bold text-xs tracking-widest uppercase flex items-center gap-2">
+            &copy; {new Date().getFullYear()} 全國會考分析系統 版權所有 
+            <span className="w-1.5 h-1.5 rounded-full bg-slate-600 hidden sm:inline-block"></span>
+            <span className="hidden sm:inline">DESIGNED WITH <span className="text-rose-500 animate-pulse">♥</span> IN TAIWAN</span>
+          </p>
+        </div>
       </footer>
     </div>
   );
