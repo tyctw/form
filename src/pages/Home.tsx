@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { Link } from 'react-router-dom';
 import { Header } from '../components/Header';
 import { 
   Building2, 
@@ -525,10 +524,10 @@ export default function Home() {
               
               <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
                 <div>
-                  <label htmlFor="region" className="text-[11px] font-bold uppercase text-slate-400 flex items-center mb-1">
+                  <div className="text-[11px] font-bold uppercase text-slate-400 flex items-center mb-1">
                     <Building2 className="w-4 h-4 mr-1.5 text-slate-400" /> 招生區域 <span className="text-slate-900 ml-1">*</span>
-                  </label>
-                  <button type="button" onClick={() => setShowRegionModal(true)} className="geo-input w-full text-left bg-white flex justify-between items-center">
+                  </div>
+                  <button type="button" id="region" onClick={() => setShowRegionModal(true)} className="geo-input w-full text-left bg-white flex justify-between items-center">
                     <span className={formData.region ? 'text-slate-900 font-bold' : 'text-slate-500'}>
                       {formData.region || '請選擇招生區'}
                     </span>
@@ -540,18 +539,18 @@ export default function Home() {
                   <label htmlFor="examYear" className="text-[11px] font-bold uppercase text-slate-400 flex items-center mb-1">
                     <GraduationCap className="w-4 h-4 mr-1.5 text-slate-400" /> 會考年度 <span className="text-slate-900 ml-1">*</span>
                   </label>
-                  <select id="examYear" name="examYear" value={formData.examYear} onChange={handleChange} className="geo-input">
+                  <select id="examYear" name="examYear" autoComplete="off" value={formData.examYear} onChange={handleChange} className="geo-input">
                     {EXAM_YEARS.map(y => <option key={y} value={y}>{y}年度</option>)}
                   </select>
                 </div>
               </div>
               <div className="mt-6">
-                <label className="text-[11px] font-bold uppercase text-slate-400 flex items-center mb-2">
+                <div className="text-[11px] font-bold uppercase text-slate-400 flex items-center mb-2">
                   <span className="w-4 h-4 mr-1.5 flex items-center justify-center font-black">
                     <User className="w-4 h-4 text-slate-400" />
                   </span>
                   分析身分 <span className="text-slate-900 ml-1">*</span>
-                </label>
+                </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   {IDENTITIES.map(identity => (
                     <button key={identity} type="button" onClick={() => setFormData(prev => ({ ...prev, identity }))} className={`py-3 px-2 font-bold transition-all border-2 geometric-card active:translate-y-0.5 active:shadow-none flex items-center justify-center ${formData.identity === identity ? 'bg-slate-900 text-white border-slate-900 shadow-[3px_3px_0_#0F172A]' : 'bg-white text-slate-700 border-slate-200 hover:border-slate-900 shadow-[2px_2px_0_transparent] hover:shadow-[3px_3px_0_#0F172A]'}`}>
@@ -579,9 +578,9 @@ export default function Home() {
                   { id: 'scienceScore', label: '自然', icon: Atom },
                 ].map((subject, index) => (
                   <div key={subject.id} className={`relative ${index !== 0 ? 'pt-6 border-t-2 border-slate-100' : ''}`}>
-                    <label className="text-[11px] font-bold uppercase text-slate-400 flex items-center mb-2">
+                    <div className="text-[11px] font-bold uppercase text-slate-400 flex items-center mb-2">
                       <subject.icon className="w-4 h-4 mr-1.5 text-slate-400" /> {subject.label}成績 <span className="text-slate-900 ml-1">*</span>
-                    </label>
+                    </div>
                     <div className="flex flex-row gap-1.5 sm:gap-2 w-full">
                       {SCORES.map(s => {
                         const isSelected = (formData as any)[subject.id] === s;
@@ -596,9 +595,9 @@ export default function Home() {
                 ))}
                 
                 <div className="relative pt-6 border-t-2 border-slate-100">
-                  <label className="text-[11px] font-bold uppercase text-slate-400 flex items-center mb-2">
+                  <div className="text-[11px] font-bold uppercase text-slate-400 flex items-center mb-2">
                     <PenTool className="w-4 h-4 mr-1.5 text-slate-400" /> 作文級分 <span className="text-slate-900 ml-1">*</span>
-                  </label>
+                  </div>
                   <div className="flex flex-row gap-1.5 sm:gap-2 w-full">
                     {ESSAY_SCORES.map(s => {
                       const isSelected = formData.essayScore === s;
@@ -616,7 +615,7 @@ export default function Home() {
 
             <div className={`flex flex-col items-start bg-slate-50 p-4 border-2 border-slate-900 geometric-card ${forceSkipRanking ? 'opacity-90 bg-slate-100' : ''} ${effectiveSkipRanking ? '!mb-20 mt-4' : 'mb-12'}`}>
               <div className="flex items-center w-full">
-                <input type="checkbox" id="skipRanking" name="skipRanking" checked={effectiveSkipRanking} disabled={forceSkipRanking} onChange={handleChange} className={`w-5 h-5 accent-slate-900 border-2 border-slate-900 bg-white ${forceSkipRanking ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'}`} />
+                <input type="checkbox" id="skipRanking" name="skipRanking" autoComplete="off" checked={effectiveSkipRanking} disabled={forceSkipRanking} onChange={handleChange} className={`w-5 h-5 accent-slate-900 border-2 border-slate-900 bg-white ${forceSkipRanking ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'}`} />
                 <label htmlFor="skipRanking" className={`ml-3 block text-sm font-bold text-slate-900 select-none ${forceSkipRanking ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
                   不想提供序位資訊，直接獲取邀請碼
                 </label>
@@ -642,25 +641,25 @@ export default function Home() {
                   <label htmlFor="minRatio" className="text-[11px] font-bold uppercase text-slate-400 flex items-center mb-1">
                     <Percent className="w-4 h-4 mr-1.5 text-slate-400" /> 最小比率 (%) <span className="text-slate-900 ml-1">*</span>
                   </label>
-                  <input type="number" step="0.01" min="0" id="minRatio" name="minRatio" value={formData.minRatio} onChange={handleChange} className="geo-input" />
+                  <input type="number" step="0.01" min="0" id="minRatio" name="minRatio" autoComplete="off" value={formData.minRatio} onChange={handleChange} className="geo-input" />
                 </div>
                 <div>
                   <label htmlFor="maxRatio" className="text-[11px] font-bold uppercase text-slate-400 flex items-center mb-1">
                     <Percent className="w-4 h-4 mr-1.5 text-slate-400" /> 最大比率 (%) <span className="text-slate-900 ml-1">*</span>
                   </label>
-                  <input type="number" step="0.01" min="0" id="maxRatio" name="maxRatio" value={formData.maxRatio} onChange={handleChange} className="geo-input" />
+                  <input type="number" step="0.01" min="0" id="maxRatio" name="maxRatio" autoComplete="off" value={formData.maxRatio} onChange={handleChange} className="geo-input" />
                 </div>
                 <div>
                   <label htmlFor="minRankInterval" className="text-[11px] font-bold uppercase text-slate-400 flex items-center mb-1">
                     <ListOrdered className="w-4 h-4 mr-1.5 text-slate-400" /> 最小區間 <span className="text-slate-900 ml-1">*</span>
                   </label>
-                  <input type="number" min="1" id="minRankInterval" name="minRankInterval" value={formData.minRankInterval} onChange={handleChange} className="geo-input" />
+                  <input type="number" min="1" id="minRankInterval" name="minRankInterval" autoComplete="off" value={formData.minRankInterval} onChange={handleChange} className="geo-input" />
                 </div>
                 <div>
                   <label htmlFor="maxRankInterval" className="text-[11px] font-bold uppercase text-slate-400 flex items-center mb-1">
                     <ListOrdered className="w-4 h-4 mr-1.5 text-slate-400" /> 最大區間 <span className="text-slate-900 ml-1">*</span>
                   </label>
-                  <input type="number" min="1" id="maxRankInterval" name="maxRankInterval" value={formData.maxRankInterval} onChange={handleChange} className="geo-input" />
+                  <input type="number" min="1" id="maxRankInterval" name="maxRankInterval" autoComplete="off" value={formData.maxRankInterval} onChange={handleChange} className="geo-input" />
                 </div>
               </div>
             </section>
@@ -680,13 +679,21 @@ export default function Home() {
                 <div className="space-y-6">
                   {activeCustomQuestions.map(q => (
                     <div key={q.id} className="bg-slate-50 border-2 border-slate-200 p-4 sm:p-5">
-                      <label className="text-sm font-bold text-slate-900 flex items-center mb-3">
-                        {q.question} {q.required && <span className="text-rose-500 ml-1">*</span>}
-                      </label>
+                      {q.type === 'text' ? (
+                        <label htmlFor={q.id} className="text-sm font-bold text-slate-900 flex items-center mb-3">
+                          {q.question} {q.required && <span className="text-rose-500 ml-1">*</span>}
+                        </label>
+                      ) : (
+                        <div className="text-sm font-bold text-slate-900 flex items-center mb-3">
+                          {q.question} {q.required && <span className="text-rose-500 ml-1">*</span>}
+                        </div>
+                      )}
                       
                       {q.type === 'text' && (
                         <input 
+                          id={q.id}
                           type="text" 
+                          autoComplete="off"
                           value={formData.customAnswers[q.id] || ''} 
                           onChange={(e) => handleCustomAnswerChange(q.id, e.target.value, 'text')}
                           className="w-full border-2 border-slate-300 p-2 focus:border-slate-900 focus:outline-none"
@@ -702,6 +709,7 @@ export default function Home() {
                                 type="radio" 
                                 name={q.id} 
                                 value={opt}
+                                autoComplete="off"
                                 checked={formData.customAnswers[q.id] === opt}
                                 onChange={(e) => handleCustomAnswerChange(q.id, e.target.value, 'radio')}
                                 className="w-4 h-4 accent-slate-900"
@@ -718,6 +726,7 @@ export default function Home() {
                             <label key={i} className="flex items-center cursor-pointer">
                               <input 
                                 type="checkbox" 
+                                autoComplete="off"
                                 checked={(formData.customAnswers[q.id] || []).includes(opt)}
                                 onChange={() => handleCustomAnswerChange(q.id, opt, 'checkbox')}
                                 className="w-4 h-4 accent-slate-900"
@@ -744,7 +753,7 @@ export default function Home() {
                 <label htmlFor="email" className="text-[11px] font-bold uppercase text-slate-400 flex items-center mb-1">
                   <Mail className="w-4 h-4 mr-1.5 text-slate-400" /> Email信箱 <span className="text-slate-900 ml-1">*</span>
                 </label>
-                <input type="email" id="email" name="email" value={formData.email} onChange={handleChange} className="geo-input max-w-md" />
+                <input type="email" id="email" name="email" autoComplete="email" value={formData.email} onChange={handleChange} className="geo-input max-w-md" />
                 <p className="mt-2 text-[11px] uppercase font-bold text-slate-400">此信箱僅用於驗證及補發分析報告使用。</p>
               </div>
             </section>
@@ -922,9 +931,9 @@ export default function Home() {
             <p className="text-slate-400 text-xs font-bold mt-1">非政府官方架設，由民間團隊營運</p>
           </div>
           <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6 text-sm font-bold text-slate-300">
-            <Link to="/admin" className="hover:text-emerald-400 transition-colors">
+            <a href="#/admin" className="hover:text-emerald-400 transition-colors">
               管理員頁面
-            </Link>
+            </a>
             <button role="button" type="button" onClick={() => setShowShareModal(true)} className="hover:text-emerald-400 transition-colors">
               分享系統
             </button>
