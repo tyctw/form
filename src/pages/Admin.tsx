@@ -1077,6 +1077,15 @@ export default function Admin() {
               </div>
             </div>
 
+            <div className="pt-4 border-t-4 border-slate-900 mt-8">
+              <button 
+                onClick={() => setShowSaveConfirm(true)}
+                className="w-full py-4 bg-emerald-400 text-slate-900 font-black text-xl border-2 border-slate-900 shadow-[6px_6px_0_#0F172A] hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-all flex items-center justify-center"
+              >
+                {loading ? <Loader2 className="w-6 h-6 animate-spin mr-2" /> : null}
+                儲存所有設定
+              </button>
+            </div>
           </div>
         )}
 
