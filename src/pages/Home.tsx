@@ -931,7 +931,7 @@ export default function Home() {
             <button onClick={() => setShowHelpModal(true)} className="hover:text-emerald-400 transition-colors">使用說明</button>
             <button onClick={() => setShowPrivacyModal(true)} className="hover:text-emerald-400 transition-colors">隱私權政策</button>
             <button onClick={() => setShowDisclaimerModal(true)} className="hover:text-emerald-400 transition-colors">免責聲明</button>
-            <a href="mailto:contact@example.com" className="hover:text-emerald-400 transition-colors">聯絡我們</a>
+            <a href="tyctw.analyze@gmail.com" className="hover:text-emerald-400 transition-colors">聯絡我們</a>
           </div>
 
           <div className="text-xs font-bold text-slate-500 tracking-wider">
