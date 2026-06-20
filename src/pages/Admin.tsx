@@ -34,6 +34,7 @@ export default function Admin() {
   const [message, setMessage] = useState('');
   const [adminLogs, setAdminLogs] = useState<any[]>([]);
   const [newPassword, setNewPassword] = useState('');
+  const [showExportModal, setShowExportModal] = useState(false);
   
   // Preview Modal
   const [showPreviewModal, setShowPreviewModal] = useState(false);
@@ -315,8 +316,24 @@ export default function Admin() {
     }
   };
 
-  const exportToCSV = () => {
-    if (data.length === 0) return;
+  const exportToCSV = (exportType: 'full' | 'skip' | 'all') => {
+    const exportMap = {
+      full: {
+        label: '完整填寫資料',
+        rows: fullDataList
+      },
+      skip: {
+        label: '無序位填寫資料',
+        rows: skipDataList
+      },
+      all: {
+        label: '全部資料',
+        rows: data
+      }
+    };
+
+    const target = exportMap[exportType];
+    if (target.rows.length === 0) return;
 
     const headers = [
       '填寫時間', '會考年度', '招生區', '身分', 
@@ -345,7 +362,7 @@ export default function Admin() {
 
     const csvContent = [
       headers.join(','),
-      ...data.map(generateRow)
+      ...target.rows.map(generateRow)
     ].join('\n');
 
     // Add BOM for Excel UTF-8 support
@@ -353,9 +370,10 @@ export default function Admin() {
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
     link.href = url;
-    link.download = `會考落點分析_問卷資料_${new Date().toISOString().slice(0, 10)}.csv`;
+    link.download = `會考落點分析_${target.label}_${new Date().toISOString().slice(0, 10)}.csv`;
     link.click();
     URL.revokeObjectURL(url);
+    setShowExportModal(false);
   };
 
   const handleLogout = () => {
@@ -472,7 +490,7 @@ export default function Admin() {
               <span className="sm:hidden">前台</span>
             </button>
             <button 
-              onClick={exportToCSV} 
+              onClick={() => setShowExportModal(true)} 
               disabled={data.length === 0}
               className="flex-1 sm:flex-none px-4 py-2 border-2 border-slate-900 bg-emerald-400 font-bold flex items-center justify-center gap-2 shadow-[2px_2px_0_#0F172A] hover:translate-y-0.5 hover:shadow-none transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
@@ -1596,6 +1614,52 @@ export default function Admin() {
                 {loading ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : null}
                 確認發佈
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showExportModal && (
+        <div className="fixed inset-0 bg-slate-900/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white border-4 border-slate-900 shadow-[8px_8px_0_#0F172A] p-6 sm:p-8 max-w-lg w-full animate-in fade-in zoom-in duration-200">
+            <div className="flex justify-between items-center mb-6 pb-4 border-b-2 border-slate-100">
+              <div>
+                <h3 className="text-2xl font-extrabold flex items-center text-slate-900">
+                  <Download className="w-6 h-6 mr-3 text-emerald-600" />
+                  選擇匯出資料
+                </h3>
+                <p className="text-sm font-bold text-slate-500 mt-2">請選擇要下載的 CSV 資料範圍</p>
+              </div>
+              <button
+                onClick={() => setShowExportModal(false)}
+                className="p-2 hover:bg-slate-100 transition-colors border-2 border-slate-900 shadow-[2px_2px_0_#0F172A] active:translate-y-0.5 active:shadow-none"
+                aria-label="關閉匯出選單"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {[
+                { id: 'full', title: '完整填寫資料', desc: '只匯出包含序位資訊的填寫資料', count: fullDataList.length },
+                { id: 'skip', title: '無序位填寫資料', desc: '只匯出略過或未提供序位區間的資料', count: skipDataList.length },
+                { id: 'all', title: '全部資料', desc: '匯出完整填寫與無序位填寫的合併資料', count: data.length }
+              ].map(option => (
+                <button
+                  key={option.id}
+                  onClick={() => exportToCSV(option.id as 'full' | 'skip' | 'all')}
+                  disabled={option.count === 0}
+                  className="w-full border-2 border-slate-900 bg-slate-50 p-4 text-left shadow-[3px_3px_0_#0F172A] hover:bg-emerald-50 hover:translate-y-0.5 hover:shadow-none active:translate-y-1 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-slate-50 disabled:hover:translate-y-0 disabled:hover:shadow-[3px_3px_0_#0F172A]"
+                >
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="font-black text-slate-900">{option.title}</span>
+                    <span className="text-sm font-black text-emerald-700 bg-white border-2 border-slate-900 px-2 py-1">
+                      {option.count} 筆
+                    </span>
+                  </div>
+                  <p className="text-sm font-bold text-slate-500 mt-2">{option.desc}</p>
+                </button>
+              ))}
             </div>
           </div>
         </div>
