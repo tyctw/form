@@ -272,6 +272,20 @@ export default function Admin() {
     });
   };
 
+  const formatCustomAnswers = (answers: unknown) => {
+    if (!answers || typeof answers !== 'object' || Array.isArray(answers)) return '';
+
+    return Object.entries(answers as Record<string, unknown>)
+      .filter(([questionId, answer]) => questionId !== '__question_labels' && answer !== undefined && answer !== null && answer !== '')
+      .map(([questionId, answer]) => {
+        const question = customQuestions.find(q => q.id === questionId);
+        const label = question?.question?.trim() || `已移除題目（${questionId}）`;
+        const value = Array.isArray(answer) ? answer.join('、') : String(answer);
+        return `${label}：${value}`;
+      })
+      .join('\n');
+  };
+
   const fetchAllData = async (tableName: string) => {
     let allData: any[] = [];
     let page = 0;
@@ -338,7 +352,7 @@ export default function Admin() {
     const headers = [
       '填寫時間', '會考年度', '招生區', '身分', 
       '國文', '數學', '英文', '社會', '自然', '作文',
-      '最小比率(%)', '最大比率(%)', '最小區間', '最大區間', 'Email', '邀請碼'
+      '最小比率(%)', '最大比率(%)', '最小區間', '最大區間', 'Email', '邀請碼', '自訂題目回答'
     ];
 
     const generateRow = (row: any) => [
@@ -357,7 +371,8 @@ export default function Admin() {
       row.minRankInterval || '',
       row.maxRankInterval || '',
       row.email,
-      row.inviteCode || ''
+      row.inviteCode || '',
+      formatCustomAnswers(row.custom_answers)
     ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(',');
 
     const csvContent = [
@@ -699,7 +714,7 @@ export default function Admin() {
               const baseData = activeTab === 'full' ? fullDataList : skipDataList;
               const filteredData = baseData.filter(row => {
                 if (!tableSearch) return true;
-                const searchStr = `${row.region} ${row.identity} ${row.examYear} ${row.chineseScore} ${row.mathScore} ${row.englishScore} ${row.socialScore} ${row.scienceScore} ${row.email || ''}`.toLowerCase();
+                const searchStr = `${row.region} ${row.identity} ${row.examYear} ${row.chineseScore} ${row.mathScore} ${row.englishScore} ${row.socialScore} ${row.scienceScore} ${row.email || ''} ${formatCustomAnswers(row.custom_answers)}`.toLowerCase();
                 return searchStr.includes(tableSearch.toLowerCase());
               });
 
@@ -758,6 +773,7 @@ export default function Admin() {
                               <th scope="col" className="px-6 py-4">序位區間</th>
                             </>
                           )}
+                          <th scope="col" className="px-6 py-4 min-w-64">自訂題目回答</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-200">
@@ -809,6 +825,15 @@ export default function Admin() {
                                 </td>
                               </>
                             )}
+                            <td className="px-6 py-4 whitespace-normal min-w-64 max-w-md">
+                              {formatCustomAnswers(row.custom_answers) ? (
+                                <div className="space-y-1 text-xs leading-relaxed text-slate-700 whitespace-pre-line">
+                                  {formatCustomAnswers(row.custom_answers)}
+                                </div>
+                              ) : (
+                                <span className="text-slate-400">未填寫</span>
+                              )}
+                            </td>
                           </tr>
                         ))}
                         {paginatedData.length === 0 && (

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { supabase } from '../supabase';
 import { Header } from '../components/Header';
 import { 
@@ -41,7 +42,26 @@ const REGIONS = [
   "雲林區", "嘉義區", "台南區", "高雄區", "屏東區", 
   "宜蘭區", "花蓮區", "台東區", "澎湖區", "金門區"
 ];
-const EXAM_YEARS = ["115", "114", "113", "112", "111", "110"];
+const TAIPEI_TIME_ZONE = 'Asia/Taipei';
+
+function getExamYears(now = new Date()) {
+  const dateParts = new Intl.DateTimeFormat('en-US', {
+    timeZone: TAIPEI_TIME_ZONE,
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+  }).formatToParts(now);
+  const part = (type: string) => Number(dateParts.find(item => item.type === type)?.value);
+  const year = part('year');
+  const month = part('month');
+  const day = part('day');
+  const hasReachedAnnualUpdate = month > 7 || (month === 7 && day >= 15);
+  const latestExamYear = year - 1911 + (hasReachedAnnualUpdate ? 1 : 0);
+
+  return Array.from({ length: 6 }, (_, index) => String(latestExamYear - index));
+}
+
+const EXAM_YEARS = getExamYears();
 const IDENTITIES = ["學生", "家長", "老師", "補教業"];
 const SCORES: SubjectScore[] = ['A++', 'A+', 'A', 'B++', 'B+', 'B', 'C'];
 const ESSAY_SCORES: EssayScoreType[] = ['6', '5', '4', '3', '2', '1', '0'];
@@ -64,7 +84,7 @@ function calculateExpirationTime() {
 
 const initialData: QuestionnaireData = {
   region: '',
-  examYear: '115',
+  examYear: EXAM_YEARS[0],
   identity: '',
   chineseScore: '',
   mathScore: '',
@@ -130,7 +150,7 @@ export default function Home() {
   }, []);
 
   const isBeforeAnnouncement = new Date() < new Date(announcementDate);
-  const forceSkipRanking = formData.examYear === '115' && isBeforeAnnouncement;
+  const forceSkipRanking = formData.examYear === EXAM_YEARS[0] && isBeforeAnnouncement;
   const effectiveSkipRanking = formData.skipRanking || forceSkipRanking;
 
   const isSubjectScoreActive = (() => {
@@ -481,7 +501,7 @@ export default function Home() {
           <div className="status-badge mb-4">Survey Mode v1.0.4</div>
           <button 
             type="button" 
-            onClick={() => setShowHelpModal(true)}
+            onClick={() => { window.location.hash = '#/guide'; }}
             className="absolute top-8 right-8 text-slate-500 hover:text-blue-600 transition-colors flex items-center gap-1 font-bold text-sm"
           >
             <HelpCircle className="w-5 h-5" />
@@ -928,9 +948,9 @@ export default function Home() {
           
           <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-6 text-xs font-bold text-slate-400">
             <button onClick={() => setShowShareModal(true)} className="hover:text-emerald-400 transition-colors">分享系統</button>
-            <button onClick={() => setShowHelpModal(true)} className="hover:text-emerald-400 transition-colors">使用說明</button>
-            <button onClick={() => setShowPrivacyModal(true)} className="hover:text-emerald-400 transition-colors">隱私權政策</button>
-            <button onClick={() => setShowDisclaimerModal(true)} className="hover:text-emerald-400 transition-colors">免責聲明</button>
+            <Link to="/guide" className="hover:text-emerald-400 transition-colors">使用說明</Link>
+            <Link to="/privacy" className="hover:text-emerald-400 transition-colors">隱私權政策</Link>
+            <Link to="/disclaimer" className="hover:text-emerald-400 transition-colors">免責聲明</Link>
             <a href="tyctw.analyze@gmail.com" className="hover:text-emerald-400 transition-colors">聯絡我們</a>
           </div>
 
