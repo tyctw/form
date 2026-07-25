@@ -62,6 +62,12 @@ function getExamYears(now = new Date()) {
 }
 
 const EXAM_YEARS = getExamYears();
+const DEFAULT_ANNOUNCEMENT_CONTENT = {
+  title: '公告：115年度序位區間已開放查詢',
+  body: '請先前往系統查詢您的序位資訊，再回來完整填寫，以獲得更準確的落點分析。',
+  linkLabel: '前往查詢序位區間',
+  linkUrl: 'https://tyctw.github.io/volunteer/',
+};
 const IDENTITIES = ["學生", "家長", "老師", "補教業"];
 const SCORES: SubjectScore[] = ['A++', 'A+', 'A', 'B++', 'B+', 'B', 'C'];
 const ESSAY_SCORES: EssayScoreType[] = ['6', '5', '4', '3', '2', '1', '0'];
@@ -117,6 +123,7 @@ export default function Home() {
   
   // App Config Settings
   const [announcementDate, setAnnouncementDate] = useState('2026-06-16T12:00:00+08:00');
+  const [announcementContent, setAnnouncementContent] = useState(DEFAULT_ANNOUNCEMENT_CONTENT);
   const [customQuestions, setCustomQuestions] = useState<CustomQuestion[]>([]);
   const [subjectScoreStartTime, setSubjectScoreStartTime] = useState<string | null>(null);
   const [subjectScoreEndTime, setSubjectScoreEndTime] = useState<string | null>(null);
@@ -132,6 +139,7 @@ export default function Home() {
         const { data } = await supabase.from('survey_config').select('*').limit(1).maybeSingle();
         if (data) {
           if (data.announcement_date) setAnnouncementDate(data.announcement_date);
+          if (data.announcement_content) setAnnouncementContent({ ...DEFAULT_ANNOUNCEMENT_CONTENT, ...data.announcement_content });
           if (data.custom_questions) {
             setCustomQuestions(data.custom_questions.filter((q: any) => q.id !== '__SYSTEM_BACKUPS__'));
           }
@@ -526,10 +534,10 @@ export default function Home() {
           <div className="mx-8 mt-8 bg-blue-50 text-blue-900 p-4 border-2 border-blue-600 flex items-start geometric-card !shadow-[4px_4px_0_#2563EB]">
             <Info className="w-5 h-5 mt-0.5 mr-3 shrink-0 text-blue-600" />
             <div className="text-sm">
-              <strong className="font-bold block mb-1">公告：115年度序位區間已開放查詢</strong>
-              <p className="mb-2">請先前往系統查詢您的序位資訊，再回來完整填寫，以獲得更準確的落點分析。</p>
-              <a href="https://tyctw.github.io/volunteer/" target="_blank" rel="noopener noreferrer" className="inline-flex items-center text-blue-700 hover:text-blue-900 font-bold transition-colors underline underline-offset-2">
-                <ExternalLink className="w-4 h-4 mr-1.5" /> 前往查詢序位區間
+              <strong className="font-bold block mb-1">{announcementContent.title}</strong>
+              <p className="mb-2">{announcementContent.body}</p>
+              <a href={announcementContent.linkUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center text-blue-700 hover:text-blue-900 font-bold transition-colors underline underline-offset-2">
+                <ExternalLink className="w-4 h-4 mr-1.5" /> {announcementContent.linkLabel}
               </a>
             </div>
           </div>

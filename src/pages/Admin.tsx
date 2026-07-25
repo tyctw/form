@@ -6,11 +6,19 @@ import {
 } from 'recharts';
 import { Lock, LayoutDashboard, Users, MapPin, Loader2, Download, Table, ClipboardList, Calendar, LogOut, ArrowUpDown, ArrowUp, ArrowDown, Eye, X, ExternalLink, Settings } from 'lucide-react';
 import { Header } from '../components/Header';
+import { ShareDialog } from '../components/ShareDialog';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
+const DEFAULT_ANNOUNCEMENT_CONTENT = {
+  title: '公告：115年度序位區間已開放查詢',
+  body: '請先前往系統查詢您的序位資訊，再回來完整填寫，以獲得更準確的落點分析。',
+  linkLabel: '前往查詢序位區間',
+  linkUrl: 'https://tyctw.github.io/volunteer/',
+};
 
 export default function Admin() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -21,6 +29,7 @@ export default function Admin() {
 
   // Settings State
   const [announcementDate, setAnnouncementDate] = useState('2026-06-16T12:00');
+  const [announcementContent, setAnnouncementContent] = useState(DEFAULT_ANNOUNCEMENT_CONTENT);
   const [customQuestions, setCustomQuestions] = useState<any[]>([]);
   const [backups, setBackups] = useState<any[]>([]);
   const [showBackupPreview, setShowBackupPreview] = useState<any | null>(null);
@@ -35,6 +44,9 @@ export default function Admin() {
   const [adminLogs, setAdminLogs] = useState<any[]>([]);
   const [newPassword, setNewPassword] = useState('');
   const [showExportModal, setShowExportModal] = useState(false);
+  const [exportStartDate, setExportStartDate] = useState('');
+  const [exportEndDate, setExportEndDate] = useState('');
+  const [isShareOpen, setIsShareOpen] = useState(false);
   
   // Preview Modal
   const [showPreviewModal, setShowPreviewModal] = useState(false);
@@ -50,6 +62,27 @@ export default function Admin() {
     setCurrentPage(1);
     setTableSearch('');
   }, [activeTab, rowsPerPage]);
+
+  useEffect(() => {
+    const restoreAdminSession = async () => {
+      if (!supabase) return;
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const { data: isAdmin } = await supabase.rpc('is_admin');
+      if (!isAdmin) {
+        await supabase.auth.signOut();
+        return;
+      }
+
+      setIsAuthenticated(true);
+      fetchData();
+      fetchSettings();
+      fetchLogs();
+    };
+
+    restoreAdminSession();
+  }, []);
 
   const handleSort = (key: string) => {
     let direction: 'asc' | 'desc' = 'asc';
@@ -77,62 +110,46 @@ export default function Admin() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!supabase) {
-      if (password === 'admin123') setIsAuthenticated(true);
+      setError('尚未設定安全的 Supabase 連線，無法登入管理介面。');
       return;
     }
 
     try {
-      const { data, error } = await supabase.rpc('verify_admin_password', {
-        p_password: password,
-        p_user_agent: navigator.userAgent
-      });
+      setError('');
+      const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+      if (signInError) throw signInError;
 
-      if (error) {
-        console.error('RPC Error:', error);
-        // Fallback for before RPC setup
-        if (password === 'admin123') {
-           setIsAuthenticated(true);
-           fetchData();
-           fetchSettings();
-           fetchLogs();
-        } else {
-           setError('登入失敗或後端未設定 (無法呼叫驗證函式)');
-        }
-      } else if (data === true) {
-        setIsAuthenticated(true);
-        fetchData();
-        fetchSettings();
-        fetchLogs();
-      } else {
-        setError('密碼錯誤');
+      const { data: isAdmin, error: roleError } = await supabase.rpc('is_admin');
+      if (roleError || !isAdmin) {
+        await supabase.auth.signOut();
+        throw new Error('此帳號沒有管理員權限');
       }
+
+      await supabase.from('admin_logs').insert({ status: 'SUCCESS', user_agent: navigator.userAgent });
+      setIsAuthenticated(true);
+      fetchData();
+      fetchSettings();
+      fetchLogs();
     } catch (err) {
       console.error(err);
-      if (password === 'admin123') setIsAuthenticated(true);
+      setError(err instanceof Error ? err.message : '登入失敗，請確認帳號、密碼與權限。');
     }
   };
 
   const handleUpdatePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!supabase || !newPassword) return;
-    if (newPassword.length < 6) {
-      alert('密碼長度需至少 6 個字元');
+    if (newPassword.length < 12) {
+      alert('密碼長度需至少 12 個字元');
       return;
     }
     
     try {
-      const { data, error } = await supabase.rpc('update_admin_password', {
-        old_password: password,
-        new_password: newPassword
-      });
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
       if (error) throw error;
-      if (data) {
-        setPassword(newPassword);
-        setNewPassword('');
-        alert('密碼修改成功');
-      } else {
-        alert('修改失敗 (原密碼錯誤或其他因素)');
-      }
+      setPassword(newPassword);
+      setNewPassword('');
+      alert('密碼修改成功');
     } catch (err: any) {
       alert('修改失敗: ' + err.message);
     }
@@ -151,6 +168,7 @@ export default function Admin() {
       const { data, error } = await supabase.from('survey_config').select('*').limit(1).maybeSingle();
       if (data) {
         if (data.announcement_date) setAnnouncementDate(formatDateTimeLocal(data.announcement_date));
+        if (data.announcement_content) setAnnouncementContent({ ...DEFAULT_ANNOUNCEMENT_CONTENT, ...data.announcement_content });
         if (data.custom_questions) {
           const actualQs = data.custom_questions.filter((q: any) => q.id !== '__SYSTEM_BACKUPS__');
           const backupsObj = data.custom_questions.find((q: any) => q.id === '__SYSTEM_BACKUPS__');
@@ -181,6 +199,7 @@ export default function Admin() {
       const backupToSave = {
         timestamp: new Date().toISOString(),
         announcement_date: isoDate,
+        announcement_content: announcementContent,
         custom_questions: customQuestions,
         subject_score_start_time: subjectScoreStartTime ? new Date(subjectScoreStartTime).toISOString() : null,
         subject_score_end_time: subjectScoreEndTime ? new Date(subjectScoreEndTime).toISOString() : null,
@@ -203,12 +222,13 @@ export default function Admin() {
       let error;
       if (existing) {
         const res = await supabase.from('survey_config').update(payload).eq('id', existing.id);
-        if (res.error && (res.error.message.includes('subject_score_enabled') || res.error.message.includes('system_enabled') || res.error.message.includes('column'))) {
+        if (res.error && (res.error.message.includes('subject_score_enabled') || res.error.message.includes('system_enabled') || res.error.message.includes('announcement_content') || res.error.message.includes('column'))) {
            console.warn('survey_config columns missing, retrying without new ones');
            delete payload.subject_score_enabled;
            delete payload.system_enabled;
            delete payload.system_start_time;
            delete payload.system_end_time;
+           delete payload.announcement_content;
            const retryRes = await supabase.from('survey_config').update(payload).eq('id', existing.id);
            error = retryRes.error;
         } else {
@@ -216,12 +236,13 @@ export default function Admin() {
         }
       } else {
         const res = await supabase.from('survey_config').insert([payload]);
-        if (res.error && (res.error.message.includes('subject_score_enabled') || res.error.message.includes('system_enabled') || res.error.message.includes('column'))) {
+        if (res.error && (res.error.message.includes('subject_score_enabled') || res.error.message.includes('system_enabled') || res.error.message.includes('announcement_content') || res.error.message.includes('column'))) {
             console.warn('survey_config columns missing, retrying without new ones');
             delete payload.subject_score_enabled;
             delete payload.system_enabled;
             delete payload.system_start_time;
             delete payload.system_end_time;
+            delete payload.announcement_content;
             const retryRes = await supabase.from('survey_config').insert([payload]);
             error = retryRes.error;
         } else {
@@ -330,7 +351,22 @@ export default function Admin() {
     }
   };
 
+  const filterRowsByExportDate = (rows: any[]) => {
+    const startTime = exportStartDate ? new Date(`${exportStartDate}T00:00:00`).getTime() : null;
+    const endTime = exportEndDate ? new Date(`${exportEndDate}T00:00:00`).getTime() + 24 * 60 * 60 * 1000 : null;
+
+    return rows.filter(row => {
+      const timestamp = new Date(row.timestamp).getTime();
+      return (!startTime || timestamp >= startTime) && (!endTime || timestamp < endTime);
+    });
+  };
+
   const exportToCSV = (exportType: 'full' | 'skip' | 'all') => {
+    if (exportStartDate && exportEndDate && exportStartDate > exportEndDate) {
+      alert('開始日期不可晚於結束日期');
+      return;
+    }
+
     const exportMap = {
       full: {
         label: '完整填寫資料',
@@ -347,7 +383,11 @@ export default function Admin() {
     };
 
     const target = exportMap[exportType];
-    if (target.rows.length === 0) return;
+    const filteredRows = filterRowsByExportDate(target.rows);
+    if (filteredRows.length === 0) {
+      alert('指定時間範圍內沒有可匯出的資料');
+      return;
+    }
 
     const headers = [
       '填寫時間', '會考年度', '招生區', '身分', 
@@ -377,7 +417,7 @@ export default function Admin() {
 
     const csvContent = [
       headers.join(','),
-      ...target.rows.map(generateRow)
+      ...filteredRows.map(generateRow)
     ].join('\n');
 
     // Add BOM for Excel UTF-8 support
@@ -392,6 +432,7 @@ export default function Admin() {
   };
 
   const handleLogout = () => {
+    supabase?.auth.signOut();
     setIsAuthenticated(false);
     setData([]);
     setFullDataList([]);
@@ -401,7 +442,7 @@ export default function Admin() {
   if (!isAuthenticated) {
     return (
       <div className="min-h-[100dvh] bg-slate-100 font-sans flex flex-col relative w-full pt-16 sm:pt-24 pb-12">
-        <Header onShareClick={() => {}} />
+        <Header onShareClick={() => setIsShareOpen(true)} />
         <div className="flex-1 w-full flex flex-col items-center justify-center p-4 mx-auto my-auto mt-8 sm:mt-16">
           <div className="bg-white border-4 border-slate-900 shadow-[8px_8px_0_#0F172A] p-6 sm:p-8 max-w-sm w-full animate-in fade-in zoom-in relative z-10">
             <div className="flex justify-center mb-6">
@@ -413,11 +454,25 @@ export default function Admin() {
             <form onSubmit={handleLogin} className="space-y-4">
               <div>
                 <input
+                  type="email"
+                  placeholder="管理員 Email"
+                  autoComplete="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  className="w-full border-2 border-slate-300 p-3 font-bold focus:border-slate-900 focus:outline-none text-sm sm:text-base"
+                  required
+                />
+              </div>
+              <div>
+                <input
                   type="password"
-                  placeholder="請輸入管理密碼 (預設: admin123)"
+                  placeholder="管理員密碼"
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   className="w-full border-2 border-slate-300 p-3 font-bold focus:border-slate-900 focus:outline-none text-sm sm:text-base"
+                  autoComplete="current-password"
+                  minLength={12}
+                  required
                 />
               </div>
               {error && <p className="text-red-500 font-bold text-sm tracking-wide">{error}</p>}
@@ -429,6 +484,7 @@ export default function Admin() {
           <div className="mt-8 text-slate-500 text-xs font-bold tracking-widest relative z-10 flex flex-col items-center gap-2">
             <p>&copy; {new Date().getFullYear()} 全國會考分析系統 版權所有</p>
           </div>
+          <ShareDialog open={isShareOpen} onClose={() => setIsShareOpen(false)} url={`${window.location.origin}${window.location.pathname}#/`} />
         </div>
       </div>
     );
@@ -488,7 +544,7 @@ export default function Admin() {
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans">
-      <Header onShareClick={() => {}} />
+      <Header onShareClick={() => setIsShareOpen(true)} />
       <div className="pt-24 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto pb-12">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-8 gap-4">
           <h1 className="text-2xl sm:text-3xl font-black flex items-center gap-3 text-slate-900">
@@ -945,6 +1001,27 @@ export default function Admin() {
                 <p className="text-sm text-slate-500 mt-2">在公告時間之前，系統會強制關閉「填寫序位資訊」功能，讓使用者直接獲取邀請碼。</p>
               </div>
 
+              <div className="mb-6 border-2 border-blue-200 bg-blue-50 p-5">
+                <h4 className="font-bold text-slate-900">序位開放後公告內容</h4>
+                <p className="mt-1 text-sm text-slate-600">公告時間到達後，前台將顯示以下內容與連結。</p>
+                <div className="mt-4 grid gap-4">
+                  <label className="text-sm font-bold text-slate-700">公告標題
+                    <input value={announcementContent.title} onChange={(e) => setAnnouncementContent(prev => ({ ...prev, title: e.target.value }))} className="mt-1.5 w-full border-2 border-slate-300 bg-white p-3 font-medium focus:border-slate-900 focus:outline-none" />
+                  </label>
+                  <label className="text-sm font-bold text-slate-700">公告說明
+                    <textarea value={announcementContent.body} onChange={(e) => setAnnouncementContent(prev => ({ ...prev, body: e.target.value }))} rows={3} className="mt-1.5 w-full resize-y border-2 border-slate-300 bg-white p-3 font-medium leading-relaxed focus:border-slate-900 focus:outline-none" />
+                  </label>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <label className="text-sm font-bold text-slate-700">按鈕文字
+                      <input value={announcementContent.linkLabel} onChange={(e) => setAnnouncementContent(prev => ({ ...prev, linkLabel: e.target.value }))} className="mt-1.5 w-full border-2 border-slate-300 bg-white p-3 font-medium focus:border-slate-900 focus:outline-none" />
+                    </label>
+                    <label className="text-sm font-bold text-slate-700">按鈕連結
+                      <input type="url" value={announcementContent.linkUrl} onChange={(e) => setAnnouncementContent(prev => ({ ...prev, linkUrl: e.target.value }))} className="mt-1.5 w-full border-2 border-slate-300 bg-white p-3 font-medium focus:border-slate-900 focus:outline-none" placeholder="https://..." />
+                    </label>
+                  </div>
+                </div>
+              </div>
+
               <div className="border-t-2 border-slate-100 pt-6 mt-6 mb-2">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4">
                   <label className="block font-bold text-slate-700">各科會考成績開放填寫</label>
@@ -1172,6 +1249,7 @@ export default function Admin() {
                           onClick={() => {
                             if (window.confirm('確定要載入此版本？\n此操作將覆蓋您目前尚未儲存的設定（直到您手動點擊「儲存所有設定」才會生效）')) {
                               if (bk.announcement_date) setAnnouncementDate(formatDateTimeLocal(bk.announcement_date));
+                              if (bk.announcement_content) setAnnouncementContent({ ...DEFAULT_ANNOUNCEMENT_CONTENT, ...bk.announcement_content });
                               if (bk.custom_questions) setCustomQuestions(bk.custom_questions);
                               if (bk.subject_score_start_time) setSubjectScoreStartTime(formatDateTimeLocal(bk.subject_score_start_time));
                               if (bk.subject_score_end_time) setSubjectScoreEndTime(formatDateTimeLocal(bk.subject_score_end_time));
@@ -1563,6 +1641,7 @@ export default function Admin() {
                   if (window.confirm('確定要載入此版本？\n此操作將覆蓋您目前尚未儲存的設定（直到您手動點擊「儲存所有設定」才會生效）')) {
                     const bk = showBackupPreview;
                     if (bk.announcement_date) setAnnouncementDate(formatDateTimeLocal(bk.announcement_date));
+                    if (bk.announcement_content) setAnnouncementContent({ ...DEFAULT_ANNOUNCEMENT_CONTENT, ...bk.announcement_content });
                     if (bk.custom_questions) setCustomQuestions(bk.custom_questions);
                     if (bk.subject_score_start_time) setSubjectScoreStartTime(formatDateTimeLocal(bk.subject_score_start_time));
                     if (bk.subject_score_end_time) setSubjectScoreEndTime(formatDateTimeLocal(bk.subject_score_end_time));
@@ -1664,11 +1743,26 @@ export default function Admin() {
               </button>
             </div>
 
+            <div className="mb-5 grid grid-cols-1 gap-3 border-2 border-slate-200 bg-slate-50 p-4 sm:grid-cols-2">
+              <label className="text-sm font-bold text-slate-700">
+                開始日期
+                <input type="date" value={exportStartDate} onChange={(e) => setExportStartDate(e.target.value)} className="mt-1.5 w-full border-2 border-slate-300 bg-white p-2 text-sm focus:border-slate-900 focus:outline-none" />
+              </label>
+              <label className="text-sm font-bold text-slate-700">
+                結束日期
+                <input type="date" value={exportEndDate} onChange={(e) => setExportEndDate(e.target.value)} className="mt-1.5 w-full border-2 border-slate-300 bg-white p-2 text-sm focus:border-slate-900 focus:outline-none" />
+              </label>
+              <div className="sm:col-span-2 flex items-center justify-between gap-3 text-xs font-medium text-slate-500">
+                <span>不填日期即匯出全部資料；結束日期包含當日全天。</span>
+                {(exportStartDate || exportEndDate) && <button type="button" onClick={() => { setExportStartDate(''); setExportEndDate(''); }} className="shrink-0 font-bold text-slate-700 underline underline-offset-2 hover:text-slate-950">清除篩選</button>}
+              </div>
+            </div>
+
             <div className="space-y-3">
               {[
-                { id: 'full', title: '完整填寫資料', desc: '只匯出包含序位資訊的填寫資料', count: fullDataList.length },
-                { id: 'skip', title: '無序位填寫資料', desc: '只匯出略過或未提供序位區間的資料', count: skipDataList.length },
-                { id: 'all', title: '全部資料', desc: '匯出完整填寫與無序位填寫的合併資料', count: data.length }
+                { id: 'full', title: '完整填寫資料', desc: '只匯出包含序位資訊的填寫資料', count: filterRowsByExportDate(fullDataList).length },
+                { id: 'skip', title: '無序位填寫資料', desc: '只匯出略過或未提供序位區間的資料', count: filterRowsByExportDate(skipDataList).length },
+                { id: 'all', title: '全部資料', desc: '匯出完整填寫與無序位填寫的合併資料', count: filterRowsByExportDate(data).length }
               ].map(option => (
                 <button
                   key={option.id}
@@ -1704,6 +1798,7 @@ export default function Admin() {
           </p>
         </div>
       </footer>
+      <ShareDialog open={isShareOpen} onClose={() => setIsShareOpen(false)} url={`${window.location.origin}${window.location.pathname}#/`} />
     </div>
   );
 }

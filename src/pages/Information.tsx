@@ -1,6 +1,8 @@
 import { ArrowLeft, ArrowRight, BookOpen, CheckCircle2, FileText, HelpCircle, Lock, ShieldCheck } from 'lucide-react';
+import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Header } from '../components/Header';
+import { ShareDialog } from '../components/ShareDialog';
 
 type PageKey = 'guide' | 'privacy' | 'disclaimer';
 
@@ -67,10 +69,11 @@ export default function Information() {
   const key = useLocation().pathname.slice(1) as PageKey;
   const page = pageData[key] ?? pageData.guide;
   const Icon = page.icon;
+  const [isShareOpen, setIsShareOpen] = useState(false);
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900">
-      <Header />
+      <Header onShareClick={() => setIsShareOpen(true)} />
       <main className="grid-pattern pt-28 pb-16 px-4 sm:px-6">
         <div className="max-w-5xl mx-auto">
           <Link to="/" className="inline-flex items-center gap-2 mb-7 text-sm font-bold text-slate-600 hover:text-slate-950 transition-colors">
@@ -125,6 +128,7 @@ export default function Information() {
           </nav>
         </div>
       </main>
+      <ShareDialog open={isShareOpen} onClose={() => setIsShareOpen(false)} />
     </div>
   );
 }
