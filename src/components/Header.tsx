@@ -106,7 +106,7 @@ export function Header({ onShareClick }: { onShareClick?: () => void }) {
             </h3>
             <div className="grid grid-cols-2 gap-4">
               <a 
-                href="https://www.instagram.com/115.rcpet/"
+                href="https://www.instagram.com/exam.tw/"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex flex-col items-center justify-center gap-3 p-5 bg-gradient-to-br from-pink-50 to-orange-50 border-2 border-pink-200 hover:border-pink-500 hover:shadow-[4px_4px_0_#db2777] hover:-translate-y-1 transition-all font-bold text-pink-700 rounded-md"
@@ -115,7 +115,7 @@ export function Header({ onShareClick }: { onShareClick?: () => void }) {
                 <span className="text-[13px] tracking-wide">Instagram</span>
               </a>
               <a 
-                href="https://www.threads.com/@115.rcpet"
+                href="https://www.threads.com/@exam.tw"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex flex-col items-center justify-center gap-3 p-5 bg-slate-50 border-2 border-slate-200 hover:border-slate-900 hover:shadow-[4px_4px_0_#0F172A] hover:-translate-y-1 transition-all font-bold text-slate-900 rounded-md"
