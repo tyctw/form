@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
+import { toCsvCell } from '../utils/spreadsheet';
+import { parseSurveyConfig } from '../utils/surveyConfig';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   PieChart, Pie, Cell, LineChart, Line, AreaChart, Area
@@ -101,8 +103,11 @@ export default function Admin() {
     if (!supabase) return;
     try {
       const { data, error } = await supabase.from('admin_logs').select('*').order('login_time', { ascending: false }).limit(100);
+      if (error) throw error;
       if (data) setAdminLogs(data);
     } catch (e) {
+      setAdminLogs([]);
+      setError('無法讀取登入紀錄，請確認管理權限與日誌設定。');
       console.error(e);
     }
   };
@@ -125,7 +130,6 @@ export default function Admin() {
         throw new Error('此帳號沒有管理員權限');
       }
 
-      await supabase.from('admin_logs').insert({ status: 'SUCCESS', user_agent: navigator.userAgent });
       setIsAuthenticated(true);
       fetchData();
       fetchSettings();
@@ -165,7 +169,9 @@ export default function Admin() {
   const fetchSettings = async () => {
     try {
       if (!supabase) return;
-      const { data, error } = await supabase.from('survey_config').select('*').limit(1).maybeSingle();
+      const { data: rawData, error } = await supabase.from('survey_config').select('*').order('id', { ascending: true }).limit(1).maybeSingle();
+      if (error) throw error;
+      const data = rawData ? parseSurveyConfig(rawData) : null;
       if (data) {
         if (data.announcement_date) setAnnouncementDate(formatDateTimeLocal(data.announcement_date));
         if (data.announcement_content) setAnnouncementContent({ ...DEFAULT_ANNOUNCEMENT_CONTENT, ...data.announcement_content });
@@ -185,6 +191,7 @@ export default function Admin() {
         if (data.system_enabled !== undefined && data.system_enabled !== null) setSystemEnabled(data.system_enabled);
       }
     } catch (e) {
+      setError('無法載入問卷設定，請確認資料格式後重試。');
       console.error(e);
     }
   };
@@ -217,7 +224,7 @@ export default function Admin() {
       payload.custom_questions = [...customQuestions, { id: '__SYSTEM_BACKUPS__', data: newBackups }];
       
       // Try update first
-      const { data: existing } = await supabase.from('survey_config').select('id').limit(1).maybeSingle();
+      const { data: existing } = await supabase.from('survey_config').select('id').order('id', { ascending: true }).limit(1).maybeSingle();
       
       let error;
       if (existing) {
@@ -413,10 +420,10 @@ export default function Admin() {
       row.email,
       row.inviteCode || '',
       formatCustomAnswers(row.custom_answers)
-    ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(',');
+    ].map(toCsvCell).join(',');
 
     const csvContent = [
-      headers.join(','),
+      headers.map(toCsvCell).join(','),
       ...filteredRows.map(generateRow)
     ].join('\n');
 
@@ -1300,7 +1307,7 @@ export default function Admin() {
             </form>
 
             <h3 className="text-xl font-bold mb-6 pb-2 border-b-2 border-slate-100 flex items-center flex-wrap gap-4 justify-between">
-              <span>近期登入紀錄 (以資料庫時區為準)</span>
+              <span>近期登入紀錄</span>
               <button 
                 onClick={fetchLogs}
                 className="text-sm border-2 border-slate-300 py-1 px-4 bg-slate-50 hover:bg-slate-100 font-bold"
@@ -1315,6 +1322,7 @@ export default function Admin() {
                   <tr>
                     <th scope="col" className="px-6 py-4">時間</th>
                     <th scope="col" className="px-6 py-4">狀態</th>
+                    <th scope="col" className="px-6 py-4">紀錄來源</th>
                     <th scope="col" className="px-6 py-4">IP 位址</th>
                     <th scope="col" className="px-6 py-4">User Agent</th>
                   </tr>
@@ -1328,9 +1336,12 @@ export default function Admin() {
                         })}
                       </td>
                       <td className="px-6 py-4 font-bold">
-                        <span className={`px-2 py-1 rounded text-xs ${log.status === 'SUCCESS' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
-                          {log.status}
+                        <span className={`px-2 py-1 rounded text-xs ${log.event_source !== 'supabase_auth' ? 'bg-amber-100 text-amber-800' : log.status === 'SUCCESS' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
+                          {log.event_source === 'supabase_auth' ? log.status : '未驗證歷史紀錄'}
                         </span>
+                      </td>
+                      <td className="px-6 py-4 text-xs text-slate-600">
+                        {log.event_source === 'supabase_auth' ? '驗證服務' : '舊版紀錄（來源未驗證）'}
                       </td>
                       <td className="px-6 py-4 font-mono text-xs text-slate-700">{log.ip_address || 'unknown'}</td>
                       <td className="px-6 py-4 text-xs text-slate-500 overflow-hidden text-ellipsis max-w-[200px]" title={log.user_agent}>
@@ -1340,7 +1351,7 @@ export default function Admin() {
                   ))}
                   {adminLogs.length === 0 && (
                     <tr>
-                      <td colSpan={4} className="px-6 py-12 text-center text-slate-500 font-bold">
+                      <td colSpan={5} className="px-6 py-12 text-center text-slate-500 font-bold">
                         目前尚無登入紀錄
                       </td>
                     </tr>
@@ -1349,7 +1360,7 @@ export default function Admin() {
               </table>
             </div>
             <p className="mt-4 text-sm text-slate-500 font-bold">
-               備註：密碼與日誌功能需要正確部署 <code>supabase_schema.sql</code> 內的 RPC 方法才能生效。若未設定，系統僅能以前端寫死密碼登入。
+               此處顯示驗證服務產生的管理員成功登入紀錄；舊版紀錄標示為未驗證。登入失敗請至驗證服務的系統紀錄查閱。IP 或瀏覽器資訊未提供時顯示 unknown。
             </p>
           </div>
         )}

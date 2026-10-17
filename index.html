@@ -15,7 +15,15 @@
     crossorigin="anonymous"></script>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <main id="startup-status" role="status" style="max-width:36rem;margin:20vh auto;padding:2rem;text-align:center;font-family:system-ui,sans-serif;color:#0f172a">
+        <h1 style="font-size:1.5rem">全國會考分析系統</h1>
+        <p id="startup-message">網站載入中，請稍候…</p>
+        <button id="startup-reload" type="button" hidden style="padding:0.75rem 1.5rem;border:2px solid #0f172a;background:white;font:inherit;cursor:pointer">重新載入</button>
+      </main>
+    </div>
+    <noscript>請啟用 JavaScript 後重新載入，以使用本網站。</noscript>
+    <script src="/startup-recovery.js"></script>
     <script type="module" src="/src/main.tsx"></script>
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-H9X7EC127P"></script>
    <script>

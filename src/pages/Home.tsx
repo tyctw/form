@@ -1,6 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../supabase';
+import { createSurveyPayload } from '../utils/surveySubmission';
+import { parseSurveyConfig } from '../utils/surveyConfig';
 import { Header } from '../components/Header';
 import { 
   Building2, 
@@ -72,22 +74,6 @@ const IDENTITIES = ["學生", "家長", "老師", "補教業"];
 const SCORES: SubjectScore[] = ['A++', 'A+', 'A', 'B++', 'B+', 'B', 'C'];
 const ESSAY_SCORES: EssayScoreType[] = ['6', '5', '4', '3', '2', '1', '0'];
 
-function generateInvitationCode() {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  const hour = String(now.getHours()).padStart(2, '0');
-  return "SH" + year + month + day + hour;
-}
-
-function calculateExpirationTime() {
-  const now = new Date();
-  const expiration = new Date(now);
-  expiration.setMinutes(59, 59, 999);
-  return expiration;
-}
-
 const initialData: QuestionnaireData = {
   region: '',
   examYear: EXAM_YEARS[0],
@@ -108,6 +94,7 @@ const initialData: QuestionnaireData = {
 };
 
 export default function Home() {
+  const pendingSubmission = useRef<{ id: string; payload: string } | null>(null);
   const [formData, setFormData] = useState<QuestionnaireData>(initialData);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
@@ -131,12 +118,15 @@ export default function Home() {
   const [systemStartTime, setSystemStartTime] = useState<string | null>(null);
   const [systemEndTime, setSystemEndTime] = useState<string | null>(null);
   const [systemEnabled, setSystemEnabled] = useState(true);
+  const [settingsError, setSettingsError] = useState(false);
 
   useEffect(() => {
     const fetchSettings = async () => {
       try {
         if (!supabase) return;
-        const { data } = await supabase.from('survey_config').select('*').limit(1).maybeSingle();
+        const { data: rawData, error } = await supabase.from('survey_config').select('*').order('id', { ascending: true }).limit(1).maybeSingle();
+        if (error || !rawData) throw new Error('無法取得問卷設定');
+        const data = parseSurveyConfig(rawData);
         if (data) {
           if (data.announcement_date) setAnnouncementDate(data.announcement_date);
           if (data.announcement_content) setAnnouncementContent({ ...DEFAULT_ANNOUNCEMENT_CONTENT, ...data.announcement_content });
@@ -151,7 +141,8 @@ export default function Home() {
           if (data.system_enabled !== undefined && data.system_enabled !== null) setSystemEnabled(data.system_enabled);
         }
       } catch (e) {
-        console.error('No custom config found, using defaults.');
+        setSettingsError(true);
+        console.error('無法載入問卷設定', e);
       }
     };
     fetchSettings();
@@ -292,78 +283,31 @@ export default function Home() {
         throw new Error("尚未設定 Supabase 連線，請在環境變數設定 VITE_SUPABASE_URL 和 VITE_SUPABASE_ANON_KEY。");
       }
 
-      let serverInviteCode = generateInvitationCode();
-      const payload: any = {
-        timestamp: new Date().toISOString(),
-        region: formData.region,
-        examYear: formData.examYear,
-        identity: formData.identity,
-        chineseScore: formData.chineseScore,
-        mathScore: formData.mathScore,
-        englishScore: formData.englishScore,
-        socialScore: formData.socialScore,
-        scienceScore: formData.scienceScore,
-        essayScore: formData.essayScore,
-        email: formData.email,
-        inviteCode: serverInviteCode,
-        custom_answers: formData.customAnswers
-      };
-      
-      const tableName = effectiveSkipRanking ? 'survey_responses_skip_ranking' : 'survey_responses_full';
-      const insertData: any = { ...payload };
-      
-      if (!effectiveSkipRanking) {
-        Object.assign(insertData, {
-          minRatio: formData.minRatio ? parseFloat(formData.minRatio) : null,
-          maxRatio: formData.maxRatio ? parseFloat(formData.maxRatio) : null,
-          minRankInterval: formData.minRankInterval ? parseInt(formData.minRankInterval, 10) : null,
-          maxRankInterval: formData.maxRankInterval ? parseInt(formData.maxRankInterval, 10) : null,
-        });
+      const payload = createSurveyPayload(formData, effectiveSkipRanking, isSubjectScoreActive,
+        activeCustomQuestions.map(question => question.id));
+      const serialized = JSON.stringify(payload);
+      if (!pendingSubmission.current || pendingSubmission.current.payload !== serialized) {
+        pendingSubmission.current = { id: crypto.randomUUID(), payload: serialized };
       }
-
-      let retries = 3;
-      let success = false;
-      let lastError = null;
-
-      while (retries > 0 && !success) {
-        try {
-          const { error } = await supabase.from(tableName).insert([insertData]);
-
-          if (error) {
-            // Graceful fallback for custom_answers column if not created
-            if (error.message.includes('custom_answers')) {
-              console.warn('custom_answers column not found. Retrying without it...');
-              delete insertData.custom_answers;
-              const retryPayload = await supabase.from(tableName).insert([insertData]);
-              if (retryPayload.error) throw new Error(retryPayload.error.message);
-              success = true;
-              break;
-            }
-            throw new Error(error.message);
-          }
-          success = true;
-        } catch (err) {
-          lastError = err;
-          retries--;
-          if (retries > 0) {
-            await new Promise(r => setTimeout(r, (3 - retries) * 1000));
-          }
-        }
-      }
-
-      if (!success) {
-        throw lastError;
-      }
-
-      setInviteResult({
-        code: serverInviteCode,
-        expiration: calculateExpirationTime()
+      const { data: result, error } = await supabase.rpc('submit_survey', {
+        p_payload: payload,
+        p_request_id: pendingSubmission.current.id,
       });
+      if (error) {
+        throw new Error(error.code === '22023'
+          ? error.message
+          : '資料儲存失敗，請稍後再試或聯絡管理員。');
+      }
+      if (!result?.inviteCode || !Number.isFinite(Date.parse(result.expiration))) {
+        throw new Error('伺服器回應格式錯誤，請聯絡管理員。');
+      }
+      setInviteResult({ code: result.inviteCode, expiration: new Date(result.expiration) });
+      pendingSubmission.current = null;
       setIsSuccess(true);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (error) {
       console.error("Submission failed:", error);
-      const errorMessage = error instanceof Error && error.message.includes("尚未設定") 
+      const errorMessage = error instanceof Error
         ? error.message 
         : "資料儲存失敗，請稍後再試或確認您的 Supabase 資料表設定。";
       alert(errorMessage);
@@ -379,6 +323,19 @@ export default function Home() {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
+
+  if (settingsError) {
+    return (
+      <div className="min-h-screen bg-slate-100">
+        <Header />
+        <main role="alert" className="max-w-xl mx-auto px-6 pt-32 text-center">
+          <h1 className="text-2xl font-black">暫時無法載入問卷</h1>
+          <p className="mt-4 text-slate-600">請稍後重新載入。若持續出現此訊息，請聯絡管理員。</p>
+          <button onClick={() => window.location.reload()} className="mt-6 border-2 border-slate-900 bg-white px-6 py-3 font-bold">重新載入</button>
+        </main>
+      </div>
+    );
+  }
 
   if (!isSystemActive) {
     return (
@@ -959,7 +916,7 @@ export default function Home() {
             <Link to="/guide" className="hover:text-emerald-400 transition-colors">使用說明</Link>
             <Link to="/privacy" className="hover:text-emerald-400 transition-colors">隱私權政策</Link>
             <Link to="/disclaimer" className="hover:text-emerald-400 transition-colors">免責聲明</Link>
-            <a href="tyctw.analyze@gmail.com" className="hover:text-emerald-400 transition-colors">聯絡我們</a>
+            <a href="mailto:tyctw.analyze@gmail.com" className="hover:text-emerald-400 transition-colors">聯絡我們</a>
           </div>
 
           <div className="text-xs font-bold text-slate-500 tracking-wider">
