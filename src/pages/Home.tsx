@@ -1,3 +1,4 @@
+import "../styles/student.css";
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "../supabase";
@@ -247,9 +248,9 @@ export default function Home() {
 
   if (isSuccess && inviteResult)
     return (
-      <>
+      <div className="student-experience">
         <Header examYear={formData.examYear} />
-        <div className="min-h-screen grid-pattern px-4 pt-28 pb-12">
+        <div className="student-page student-result-page">
           <StudentResult
             result={inviteResult}
             now={clockNow}
@@ -262,7 +263,7 @@ export default function Home() {
             }}
           />
         </div>
-      </>
+      </div>
     );
 
   if (settingsLoading)
@@ -319,14 +320,14 @@ export default function Home() {
   }
 
   return (
-    <>
+    <div className="student-experience">
       <Header
         examYear={formData.examYear}
         onShareClick={() => setShowShareModal(true)}
       />
-      <div className="min-h-screen grid-pattern pt-28 pb-12 px-4 sm:px-6 lg:px-8 font-sans">
+      <div className="student-page">
         <aside
-          className={`max-w-3xl mx-auto mb-4 border-2 p-4 text-sm ${announcement.before ? "border-slate-300 bg-slate-50" : "border-blue-200 bg-blue-50"}`}
+          className={`student-announcement ${announcement.before ? "is-pending" : ""}`}
           aria-label="所選年度公告"
         >
           <p className="font-bold">{announcement.title}</p>
@@ -365,7 +366,7 @@ export default function Home() {
       </div>
 
       {/* Footer */}
-      <footer className="bg-slate-900 border-t-8 border-emerald-400 py-6 px-4 sm:px-6 lg:px-8 mt-12 relative z-10">
+      <footer className="student-footer">
         <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 bg-emerald-400 flex items-center justify-center -rotate-6 shadow-[2px_2px_0_#34D399] border-2 border-transparent">
@@ -529,6 +530,6 @@ export default function Home() {
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 }

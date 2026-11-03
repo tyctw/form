@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { ArrowRight, Check, ChevronDown } from "lucide-react";
 import type { QuestionnaireData } from "../types";
 import {
   activeSurveySteps,
@@ -35,7 +36,7 @@ const TITLES: Record<SurveyStep, string> = {
   review: "確認送出",
 };
 const ORDER: SurveyStep[] = ["basic", "scores", "custom", "review"];
-const inputClass = "geo-input min-h-12 scroll-mt-28";
+const inputClass = "student-input min-h-12 scroll-mt-28";
 export function StudentSurvey(p: Props) {
   const { data, setData, rules } = p;
   const steps = activeSurveySteps(rules);
@@ -171,7 +172,7 @@ export function StudentSurvey(p: Props) {
         key={key}
         tabIndex={-1}
         {...fieldAttrs(key)}
-        className="scroll-mt-28 border-b border-slate-200 pb-5 last:border-0"
+        className="student-score-group scroll-mt-28"
       >
         <legend className="mb-3 font-bold">
           {label}
@@ -189,11 +190,11 @@ export function StudentSurvey(p: Props) {
                 change(key, value);
                 touch(key);
               }}
-              className={`min-h-12 border-2 px-2 py-3 font-bold focus-visible:outline-4 focus-visible:outline-blue-500 ${data[key] === value ? "bg-slate-900 border-slate-900 text-white" : "bg-white border-slate-300 text-slate-700"}`}
+              className="student-choice student-score-choice"
             >
               {value}
               {data[key] === value && (
-                <span className="ml-1" aria-hidden="true">
+                <span className="student-choice-check" aria-hidden="true">
                   ✓
                 </span>
               )}
@@ -209,14 +210,14 @@ export function StudentSurvey(p: Props) {
     target: SurveyStep,
     content: React.ReactNode,
   ) => (
-    <section className="border-2 border-slate-200 bg-slate-50 p-4">
+    <section className="student-review-card">
       <div className="flex items-center justify-between gap-3 mb-3">
         <h3 className="font-black">{title}</h3>
         {steps.includes(target) && (
           <button
             type="button"
             onClick={() => go(target)}
-            className="min-h-11 px-3 underline font-bold"
+            className="student-edit-button"
             aria-label={`修改${title}`}
           >
             修改
@@ -227,18 +228,20 @@ export function StudentSurvey(p: Props) {
     </section>
   );
   return (
-    <div className="max-w-3xl mx-auto border-2 border-slate-900 bg-white shadow-[5px_5px_0_#0F172A]">
-      <div className="border-b-2 border-slate-900 p-5 sm:p-8">
-        <p className="text-sm font-bold text-emerald-700 mb-2">
-          會考成績與序位調查
-        </p>
-        <h1 className="text-3xl sm:text-4xl font-black">會考序位調查問卷</h1>
-        <p className="mt-3 text-sm text-slate-600">
+    <div className="student-card" data-step={current}>
+      <div className="student-card-header">
+        <div className="student-edition" aria-hidden="true">
+          <span>{data.examYear}</span>
+          <small>年度會考調查</small>
+        </div>
+        <p className="student-eyebrow">全國會考分析系統 ／ 資料徵集</p>
+        <h1 className="student-title">會考序位調查問卷</h1>
+        <p className="student-intro">
           依成績單填寫；沒有序位也可以繼續。送出前還有一次確認機會。
         </p>
         <ol
           aria-label="填寫進度"
-          className="mt-6 grid gap-2"
+          className="student-stepper"
           style={{
             gridTemplateColumns: `repeat(${steps.length},minmax(0,1fr))`,
           }}
@@ -247,109 +250,51 @@ export function StudentSurvey(p: Props) {
             <li
               key={key}
               aria-current={key === current ? "step" : undefined}
-              className={`border-t-4 pt-2 text-xs sm:text-sm ${i === index ? "border-emerald-500 font-black text-emerald-800" : "border-slate-200 text-slate-500"}`}
+              className={`student-step ${i < index ? "is-complete" : ""}`}
             >
-              <span className="block">{i < index ? "✓" : i + 1}</span>
-              {TITLES[key]}
+              <span className="student-step-number">
+                {i < index ? (
+                  <Check size={16} aria-label="已完成" />
+                ) : (
+                  String(i + 1).padStart(2, "0")
+                )}
+              </span>
+              <span className="student-step-name">{TITLES[key]}</span>
             </li>
           ))}
         </ol>
         <progress
-          className="mt-4 w-full h-2 accent-emerald-600"
+          className="student-progress sr-only"
           value={index + 1}
           max={steps.length}
           aria-label="填寫步驟進度"
         />
       </div>
-      <div className="p-5 sm:p-8">
-        <details
-          open={current === "basic"}
-          className="mb-6 bg-slate-50 border border-slate-200 p-4 text-sm space-y-3"
-          aria-label="草稿保存"
-        >
-          <summary className="min-h-11 cursor-pointer font-bold">
-            草稿保存與清除
-          </summary>
-          <p>
-            本分頁會暫存草稿，方便意外重新整理後恢復；每份草稿在最後保存後 7
-            天到期。
-          </p>
-          <label className="flex items-start gap-3">
-            <input
-              className="mt-1 w-5 h-5 shrink-0"
-              type="checkbox"
-              checked={p.remember}
-              onChange={(event) => p.setRemember(event.target.checked)}
-              disabled={p.submitting}
-            />
-            <span>
-              記住這次填寫（此裝置最多 7 天）
-              <span className="block text-xs text-slate-500 mt-1">
-                共用電腦請勿勾選；將保存
-                Email、成績及回答。送出成功後會清除草稿。
-              </span>
-            </span>
-          </label>
-          {p.persistentDraft && (
-            <div className="border border-amber-400 p-3">
-              <p>
-                此裝置有一份保存的草稿，期限至{" "}
-                {new Date(p.persistentDraft.expiresAt).toLocaleString("zh-TW", {
-                  timeZone: "Asia/Taipei",
-                })}
-                （台北時間）。
-              </p>
-              <button
-                type="button"
-                onClick={p.restoreDraft}
-                disabled={p.submitting}
-                className="min-h-11 mr-4 underline font-bold"
-              >
-                恢復上次草稿
-              </button>
-            </div>
-          )}
-          <button
-            type="button"
-            onClick={() => {
-              if (window.confirm("確定清除草稿及已填寫內容？")) {
-                p.clearDraft();
-                go("basic");
-              }
-            }}
-            disabled={p.submitting}
-            className="min-h-11 underline"
-          >
-            清除草稿與填寫內容
-          </button>
-          {p.recoveryMessage && (
-            <p role="status" className="text-emerald-800">
-              {p.recoveryMessage}
-            </p>
-          )}
-          {p.storageError && (
-            <p role="alert" className="text-red-700">
-              {p.storageError}
-            </p>
-          )}
-        </details>
-        {current !== "basic" && p.storageError && (
-          <p role="alert" className="mb-4 text-red-700">
-            {p.storageError}
-          </p>
-        )}
+      <div className="student-card-body">
         <h2
           ref={heading}
           tabIndex={-1}
-          className="text-xl font-black mb-6 scroll-mt-28"
+          className="student-section-title scroll-mt-28"
         >
           第 {index + 1}/{steps.length} 步：{TITLES[current]}
         </h2>
+        <p className="student-section-hint">
+          {
+            {
+              basic: "先填寫基本資訊，後續步驟都可以返回修改。",
+              scores: "依照成績單選擇等級，不確定序位時可以略過。",
+              custom: "請依實際情況回答，標示選填的題目可以留白。",
+              review: "再確認一次，讓每一份填答都更準確。",
+            }[current]
+          }
+        </p>
+        {p.recoveryMessage && (
+          <p role="status" className="text-emerald-800">
+            {p.recoveryMessage}
+          </p>
+        )}
         {errorSummary.filter((key) => errors[key]).length > 0 && (
-          <div
-            role="alert"
-            className="mb-5 border-2 border-red-400 bg-red-50 p-4"
-          >
+          <div role="alert" className="student-error-summary">
             <p className="font-bold">請修正以下欄位：</p>
             <ul>
               {errorSummary
@@ -374,7 +319,10 @@ export function StudentSurvey(p: Props) {
           onSubmit={advance}
           noValidate
         >
-          <fieldset disabled={p.submitting} className="space-y-6 min-w-0">
+          <fieldset
+            disabled={p.submitting}
+            className={`student-fields min-w-0 ${current === "basic" ? "student-basic-grid" : ""}`}
+          >
             {current === "basic" && (
               <>
                 <div>
@@ -427,7 +375,7 @@ export function StudentSurvey(p: Props) {
                 <fieldset
                   tabIndex={-1}
                   {...fieldAttrs("identity")}
-                  className="scroll-mt-28"
+                  className="student-identity scroll-mt-28"
                 >
                   <legend className="font-bold mb-3">填寫身分（必填）</legend>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -440,7 +388,7 @@ export function StudentSurvey(p: Props) {
                           change("identity", identity);
                           touch("identity");
                         }}
-                        className={`min-h-12 border-2 p-3 font-bold ${data.identity === identity ? "bg-slate-900 text-white border-slate-900" : "border-slate-300"}`}
+                        className="student-choice"
                       >
                         {identity}
                         {data.identity === identity && " ✓"}
@@ -488,7 +436,7 @@ export function StudentSurvey(p: Props) {
                     各科成績目前未開放，本次不會提交先前輸入的成績。
                   </p>
                 )}
-                <div className="border-2 border-slate-300 bg-slate-50 p-4">
+                <div className="student-skip-card">
                   <label className="flex items-start gap-3 font-bold">
                     <input
                       type="checkbox"
@@ -510,7 +458,7 @@ export function StudentSurvey(p: Props) {
                 {!skip && (
                   <>
                     <aside
-                      className="border-2 border-blue-200 bg-blue-50 p-4 text-sm"
+                      className="student-example"
                       aria-label="序位填寫範例"
                     >
                       <h3 className="font-black mb-2">
@@ -570,7 +518,7 @@ export function StudentSurvey(p: Props) {
                   key={q.id}
                   tabIndex={-1}
                   {...fieldAttrs("q:" + q.id)}
-                  className="border-2 border-slate-200 p-4 scroll-mt-28 min-w-0"
+                  className="student-question scroll-mt-28 min-w-0"
                 >
                   <legend className="px-2 font-bold break-words">
                     {q.question}（{q.required ? "必填" : "選填"}）
@@ -598,7 +546,7 @@ export function StudentSurvey(p: Props) {
                       {q.options?.map((option) => (
                         <label
                           key={option}
-                          className="flex items-center gap-3 border border-slate-300 p-3 min-h-12 break-words"
+                          className="student-answer-choice flex items-center gap-3 break-words"
                         >
                           <input
                             className="w-5 h-5 shrink-0"
@@ -728,8 +676,85 @@ export function StudentSurvey(p: Props) {
               </div>
             )}
           </fieldset>
+          <details
+            open={current === "basic"}
+            className="student-draft"
+            aria-label="草稿保存"
+          >
+            <summary>
+              <span>草稿保存與清除</span>
+              <span className="student-draft-meta">
+                瀏覽器暫存 <ChevronDown size={15} aria-hidden="true" />
+              </span>
+            </summary>
+            <p>
+              本分頁會暫存草稿，方便意外重新整理後恢復；每份草稿在最後保存後 7
+              天到期。
+            </p>
+            <label className="flex items-start gap-3">
+              <input
+                className="mt-1 w-5 h-5 shrink-0"
+                type="checkbox"
+                checked={p.remember}
+                onChange={(event) => p.setRemember(event.target.checked)}
+                disabled={p.submitting}
+              />
+              <span>
+                記住這次填寫（此裝置最多 7 天）
+                <span className="block text-xs text-slate-500 mt-1">
+                  共用電腦請勿勾選；將保存
+                  Email、成績及回答。送出成功後會清除草稿。
+                </span>
+              </span>
+            </label>
+            {p.persistentDraft && (
+              <div className="border border-amber-400 p-3">
+                <p>
+                  此裝置有一份保存的草稿，期限至{" "}
+                  {new Date(p.persistentDraft.expiresAt).toLocaleString(
+                    "zh-TW",
+                    {
+                      timeZone: "Asia/Taipei",
+                    },
+                  )}
+                  （台北時間）。
+                </p>
+                <button
+                  type="button"
+                  onClick={p.restoreDraft}
+                  disabled={p.submitting}
+                  className="min-h-11 mr-4 underline font-bold"
+                >
+                  恢復上次草稿
+                </button>
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                if (window.confirm("確定清除草稿及已填寫內容？")) {
+                  p.clearDraft();
+                  go("basic");
+                }
+              }}
+              disabled={p.submitting}
+              className="student-clear-button"
+            >
+              清除草稿與填寫內容
+            </button>
+            {p.storageError && (
+              <p role="alert" className="text-red-700">
+                {p.storageError}
+              </p>
+            )}
+          </details>
+          {current !== "basic" && p.storageError && (
+            <p role="alert" className="mb-4 text-red-700">
+              {p.storageError}
+            </p>
+          )}
           <div
-            className="sticky bottom-0 z-20 mt-8 border-t-2 border-slate-900 bg-white pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] flex gap-3"
+            className="student-actions"
             ref={actionBar}
             aria-label="步驟操作"
           >
@@ -738,7 +763,7 @@ export function StudentSurvey(p: Props) {
                 type="button"
                 disabled={p.submitting}
                 onClick={() => go(steps[index - 1])}
-                className="min-h-12 border-2 border-slate-300 bg-white px-4 py-3 font-bold disabled:opacity-50"
+                className="student-secondary-button"
               >
                 上一步
               </button>
@@ -746,15 +771,24 @@ export function StudentSurvey(p: Props) {
             <button
               type="submit"
               disabled={p.submitting}
-              className="flex-1 min-h-12 border-2 border-slate-900 bg-emerald-300 px-4 py-3 font-black disabled:opacity-50"
+              className="student-primary-button"
             >
               {p.submitting
                 ? "資料提交中…"
                 : current === "review"
                   ? "確認送出"
                   : "下一步"}
+              {!p.submitting &&
+                (current === "review" ? (
+                  <Check size={18} aria-hidden="true" />
+                ) : (
+                  <ArrowRight size={18} aria-hidden="true" />
+                ))}
             </button>
           </div>
+          <p className="student-form-note">
+            確認送出前，資料不會提交至伺服器。
+          </p>
         </form>
       </div>
     </div>

@@ -1,3 +1,4 @@
+import { ArrowUpRight } from "lucide-react";
 import { useState } from "react";
 export function StudentResult({
   result,
@@ -28,9 +29,12 @@ export function StudentResult({
     }
   };
   return (
-    <main className="max-w-3xl mx-auto border-2 border-slate-900 bg-white p-5 sm:p-10 shadow-[6px_6px_0_#0F172A]">
-      <p className="font-bold text-emerald-800 mb-3">資料已成功送出</p>
-      <h1 className="text-3xl font-black">
+    <main className="student-result">
+      <div className="student-receipt-stamp" aria-hidden="true">
+        提交完成
+      </div>
+      <p className="student-eyebrow">資料已成功送出</p>
+      <h1 className="student-title">
         {expired ? "邀請碼已到期" : "落點分析邀請碼"}
       </h1>
       <p className="mt-4 text-slate-600">
@@ -44,12 +48,12 @@ export function StudentResult({
         </p>
       )}
       <p
-        className="my-6 border-2 border-slate-900 bg-slate-50 px-4 py-6 text-2xl sm:text-4xl font-mono font-black break-all select-all"
+        className="student-ticket font-mono break-all select-all"
         aria-label="邀請碼"
       >
         {result.code}
       </p>
-      <dl className="space-y-3 text-sm">
+      <dl className="student-result-details">
         <div>
           <dt className="font-bold">到期時間（台北時間）</dt>
           <dd>
@@ -90,7 +94,7 @@ export function StudentResult({
         {expired ? (
           <button
             disabled
-            className="w-full min-h-12 bg-slate-200 border-2 border-slate-300 p-3 font-bold"
+            className="student-secondary-button student-expired-button w-full"
           >
             前往分析（已到期）
           </button>
@@ -99,9 +103,9 @@ export function StudentResult({
             href={url}
             target="_blank"
             rel="noopener noreferrer"
-            className="block min-h-12 bg-emerald-300 border-2 border-slate-900 p-3 font-black text-center"
+            className="student-primary-button w-full"
           >
-            前往分析
+            前往分析 <ArrowUpRight size={18} aria-hidden="true" />
           </a>
         )}
         {!expired && (
@@ -109,7 +113,7 @@ export function StudentResult({
             <button
               type="button"
               onClick={copy}
-              className="w-full min-h-12 border-2 border-slate-900 p-3 font-bold"
+              className="student-secondary-button w-full"
             >
               {copied ? "已複製分析連結" : "複製分析連結"}
             </button>
@@ -122,7 +126,7 @@ export function StudentResult({
                 aria-label="分析連結"
                 value={url}
                 onFocus={(event) => event.target.select()}
-                className="geo-input"
+                className="student-input"
               />
             )}
           </>
