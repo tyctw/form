@@ -31,7 +31,7 @@ export function StudentResult({
   return (
     <main className="student-result">
       <div className="student-receipt-stamp" aria-hidden="true">
-        提交完成
+        <ArrowUpRight size={24} />
       </div>
       <p className="student-eyebrow">資料已成功送出</p>
       <h1 className="student-title">

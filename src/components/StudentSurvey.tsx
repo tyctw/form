@@ -230,21 +230,15 @@ export function StudentSurvey(p: Props) {
   return (
     <div className="student-card" data-step={current}>
       <div className="student-card-header">
-        <div className="student-edition" aria-hidden="true">
-          <span>{data.examYear}</span>
-          <small>年度會考調查</small>
-        </div>
-        <p className="student-eyebrow">全國會考分析系統 ／ 資料徵集</p>
+        <p className="student-eyebrow">{data.examYear} 年度 · 全國會考調查</p>
         <h1 className="student-title">會考序位調查問卷</h1>
         <p className="student-intro">
-          依成績單填寫；沒有序位也可以繼續。送出前還有一次確認機會。
+          依成績單填寫。沒有序位也可以繼續，送出前可再次確認。
         </p>
         <ol
           aria-label="填寫進度"
           className="student-stepper"
-          style={{
-            gridTemplateColumns: `repeat(${steps.length},minmax(0,1fr))`,
-          }}
+          style={{ "--step-count": steps.length } as React.CSSProperties}
         >
           {steps.map((key, i) => (
             <li
@@ -252,14 +246,27 @@ export function StudentSurvey(p: Props) {
               aria-current={key === current ? "step" : undefined}
               className={`student-step ${i < index ? "is-complete" : ""}`}
             >
-              <span className="student-step-number">
-                {i < index ? (
-                  <Check size={16} aria-label="已完成" />
-                ) : (
-                  String(i + 1).padStart(2, "0")
-                )}
-              </span>
-              <span className="student-step-name">{TITLES[key]}</span>
+              <button
+                type="button"
+                disabled={i >= index || p.submitting}
+                onClick={() => go(key)}
+                className="student-step-button"
+                aria-label={`返回${TITLES[key]}`}
+              >
+                <span className="student-step-number">
+                  {i < index ? <Check size={15} aria-hidden="true" /> : i + 1}
+                </span>
+                <span className="student-step-label">
+                  <span className="student-step-name">{TITLES[key]}</span>
+                  <small>
+                    {i === index
+                      ? "目前填寫"
+                      : i < index
+                        ? "已填寫"
+                        : "接續步驟"}
+                  </small>
+                </span>
+              </button>
             </li>
           ))}
         </ol>
@@ -271,6 +278,12 @@ export function StudentSurvey(p: Props) {
         />
       </div>
       <div className="student-card-body">
+        <p className="student-form-kicker" aria-hidden="true">
+          填寫資料{" "}
+          <span>
+            {index + 1} / {steps.length}
+          </span>
+        </p>
         <h2
           ref={heading}
           tabIndex={-1}
@@ -428,7 +441,7 @@ export function StudentSurvey(p: Props) {
             {current === "scores" && (
               <>
                 {rules.scoresActive ? (
-                  <div className="space-y-6">
+                  <div className="student-subjects">
                     {SUBJECTS.map(([key, label]) => scoreGroup(key, label))}
                   </div>
                 ) : (
