@@ -1,13 +1,13 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { HashRouter } from 'react-router-dom'; // 修改這裡
+import { createHashRouter, RouterProvider } from 'react-router-dom';
 import App from './App.tsx';
 import './index.css';
 
+const router = createHashRouter([{ path: '*', element: <App /> }]);
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <HashRouter> {/* 修改這裡，並移除 basename */}
-      <App />
-    </HashRouter>
+    <RouterProvider router={router} />
   </StrictMode>,
 );

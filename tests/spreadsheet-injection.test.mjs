@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import { test } from 'node:test';
 import { toSpreadsheetCell, toCsvCell } from '../src/utils/spreadsheet.ts';
+import { EXPORT_FIELDS, exportCsvRow } from '../src/utils/adminExport.ts';
 
 const attacks = [
   '=1+1', '+SUM(1,2)', '-1+1', '@SUM(1,2)',
@@ -73,9 +74,9 @@ test('CSV escaping preserves cell boundaries and neutralizes formulas', () => {
 
 test('actual admin export sanitizes every output cell, including custom-answer text', () => {
   const source = fs.readFileSync(new URL('../src/pages/Admin.tsx', import.meta.url), 'utf8');
-  const rowCode = source.slice(source.indexOf('const generateRow ='), source.indexOf('const csvContent ='))
+  const rowCode = source.slice(source.indexOf('const generateRow ='), source.indexOf('// Only an explicit export'))
     .replace('(row: any)', '(row)');
-  const context = vm.createContext({ toCsvCell, formatCustomAnswers: () => '\t=1+1' });
+  const context = vm.createContext({ toCsvCell, exportCsvRow, selectedFields: EXPORT_FIELDS, includePersonal: true, formatCustomAnswers: () => '\t=1+1' });
   vm.runInContext(rowCode + '\nglobalThis.exportRow = generateRow;', context);
   for (const value of attacks) {
     const row = Object.fromEntries(['examYear', 'region', 'identity', 'chineseScore', 'mathScore',

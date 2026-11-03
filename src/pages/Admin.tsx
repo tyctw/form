@@ -1,7 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabase';
+import { Link, useBlocker } from 'react-router-dom';
+import { DEFAULT_ANNOUNCEMENT, taipeiInput, toSettingsDraft, settingsPayload, settingsDiff, settingsIssues, type SettingsDraft } from '../utils/adminSettings';
+import { EXPORT_FIELDS, exportCsvRow, type ExportField } from '../utils/adminExport';
 import { toCsvCell } from '../utils/spreadsheet';
 import { parseSurveyConfig } from '../utils/surveyConfig';
+import { EMPTY_ADMIN_FILTERS, EMPTY_ADMIN_STATS, validateAdminFilters, type AdminFilters, type AdminStats, type SurveyKind } from '../utils/adminSurvey';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   PieChart, Pie, Cell, LineChart, Line, AreaChart, Area
@@ -11,12 +15,7 @@ import { Header } from '../components/Header';
 import { ShareDialog } from '../components/ShareDialog';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
-const DEFAULT_ANNOUNCEMENT_CONTENT = {
-  title: '公告：115年度序位區間已開放查詢',
-  body: '請先前往系統查詢您的序位資訊，再回來完整填寫，以獲得更準確的落點分析。',
-  linkLabel: '前往查詢序位區間',
-  linkUrl: 'https://tyctw.github.io/volunteer/',
-};
+const DEFAULT_ANNOUNCEMENT_CONTENT = DEFAULT_ANNOUNCEMENT;
 
 export default function Admin() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -24,9 +23,18 @@ export default function Admin() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [data, setData] = useState<any[]>([]); // combined
-  const [fullDataList, setFullDataList] = useState<any[]>([]);
-  const [skipDataList, setSkipDataList] = useState<any[]>([]);
+  const [pageRows, setPageRows] = useState<any[]>([]);
+  const [pageTotal, setPageTotal] = useState(0);
+  const [stats, setStats] = useState<AdminStats>(EMPTY_ADMIN_STATS);
+  const [statsLoading, setStatsLoading] = useState(false);
+  const [queryError, setQueryError] = useState('');
+  const [draftFilters, setDraftFilters] = useState<AdminFilters>({ ...EMPTY_ADMIN_FILTERS });
+  const [filters, setFilters] = useState<AdminFilters>({ ...EMPTY_ADMIN_FILTERS });
+  const [filterError, setFilterError] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
+  const [exporting, setExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState(0);
+  const exportController = useRef<AbortController | null>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'full' | 'skip' | 'settings' | 'backups' | 'logs'>('overview');
 
   // Settings State
@@ -36,6 +44,14 @@ export default function Admin() {
   const [backups, setBackups] = useState<any[]>([]);
   const [showBackupPreview, setShowBackupPreview] = useState<any | null>(null);
   const [showSaveConfirm, setShowSaveConfirm] = useState(false);
+  const [baseline, setBaseline] = useState<SettingsDraft | null>(null);
+  const [configVersion, setConfigVersion] = useState<{ id: number | null; revision: number | null }>({ id: null, revision: null });
+  const [remoteConfig, setRemoteConfig] = useState<{ current: any } | null>(null);
+  const [settingsLoading, setSettingsLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [settingsError, setSettingsError] = useState('');
+  const [includePersonal, setIncludePersonal] = useState(false);
+  const [exportFields, setExportFields] = useState<ExportField[]>(EXPORT_FIELDS.map(([key]) => key));
   const [subjectScoreStartTime, setSubjectScoreStartTime] = useState('');
   const [subjectScoreEndTime, setSubjectScoreEndTime] = useState('');
   const [subjectScoreEnabled, setSubjectScoreEnabled] = useState(true);
@@ -46,8 +62,6 @@ export default function Admin() {
   const [adminLogs, setAdminLogs] = useState<any[]>([]);
   const [newPassword, setNewPassword] = useState('');
   const [showExportModal, setShowExportModal] = useState(false);
-  const [exportStartDate, setExportStartDate] = useState('');
-  const [exportEndDate, setExportEndDate] = useState('');
   const [isShareOpen, setIsShareOpen] = useState(false);
   
   // Preview Modal
@@ -55,15 +69,141 @@ export default function Admin() {
   const [previewAnswers, setPreviewAnswers] = useState<Record<string, any>>({});
 
   // Table view state
-  const [tableSearch, setTableSearch] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' } | null>(null);
 
+  const draft: SettingsDraft = {
+    announcement_date: announcementDate, announcement_content: announcementContent, custom_questions: customQuestions,
+    subject_score_start_time: subjectScoreStartTime, subject_score_end_time: subjectScoreEndTime,
+    subject_score_enabled: subjectScoreEnabled, system_start_time: systemStartTime, system_end_time: systemEndTime, system_enabled: systemEnabled,
+  };
+  const changes = baseline ? settingsDiff(baseline, draft) : [];
+  if (baseline && configVersion.id === null) changes.unshift({ label: '設定建立', before: '尚未設定', after: '建立表單設定' });
+  const dirty = baseline !== null && changes.length > 0;
+  const issues = settingsIssues(draft);
+  const blocker = useBlocker(dirty);
+
+  useEffect(() => { if (dirty) setMessage(''); }, [dirty]);
+
   useEffect(() => {
+    if (!showSaveConfirm && !showExportModal) return;
+    const previousOverflow = document.body.style.overflow;
+    const previousFocus = document.activeElement as HTMLElement | null;
+    document.body.style.overflow = 'hidden';
+    const dialog = document.querySelector<HTMLElement>('[data-admin-modal]');
+    dialog?.focus();
+    const keydown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !saving) {
+        if (showExportModal) { exportController.current?.abort(); setShowExportModal(false); }
+        else setShowSaveConfirm(false);
+      }
+      if (event.key !== 'Tab' || !dialog) return;
+      const controls = Array.from(dialog.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href]'));
+      const first = controls[0], last = controls[controls.length - 1];
+      if (!first) { event.preventDefault(); return; }
+      if (event.shiftKey && (document.activeElement === first || document.activeElement === dialog)) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && (document.activeElement === last || document.activeElement === dialog)) { event.preventDefault(); first.focus(); }
+    };
+    document.addEventListener('keydown', keydown);
+    return () => { document.body.style.overflow = previousOverflow; document.removeEventListener('keydown', keydown); if (previousFocus?.isConnected) previousFocus.focus(); };
+  }, [showSaveConfirm, showExportModal, saving]);
+
+  useEffect(() => {
+    if (!dirty) return;
+    const beforeUnload = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ''; };
+    window.addEventListener('beforeunload', beforeUnload);
+    return () => window.removeEventListener('beforeunload', beforeUnload);
+  }, [dirty]);
+
+  useEffect(() => {
+    if (blocker.state !== 'blocked') return;
+    if (window.confirm('尚有未儲存的設定，離開將捨棄草稿。確定離開？')) blocker.proceed();
+    else blocker.reset();
+  }, [blocker]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !baseline || !supabase) return;
+    let cancelled = false;
+    const check = async () => {
+      if (document.visibilityState === 'hidden') return;
+      const { data, error } = await supabase.from('survey_config').select('id,revision').order('id').limit(1).maybeSingle();
+      if (cancelled || error) return;
+      if ((data?.id ?? null) !== configVersion.id || (data?.revision ?? null) !== configVersion.revision) {
+        const latest = await supabase.from('survey_config').select('*').order('id').limit(1).maybeSingle();
+        if (!cancelled && !latest.error) setRemoteConfig({ current: latest.data });
+      }
+    };
+    const interval = window.setInterval(check, 30000);
+    window.addEventListener('focus', check);
+    document.addEventListener('visibilitychange', check);
+    return () => { cancelled = true; clearInterval(interval); window.removeEventListener('focus', check); document.removeEventListener('visibilitychange', check); };
+  }, [isAuthenticated, baseline, configVersion]);
+
+  useEffect(() => () => exportController.current?.abort(), []);
+
+  useEffect(() => {
+    if (!isAuthenticated || !supabase) return;
+    const controller = new AbortController();
+    setStatsLoading(true);
+    setStats(EMPTY_ADMIN_STATS);
+    setQueryError('');
+    (async () => {
+      try {
+        const { data, error } = await supabase.rpc('admin_survey_stats', { p_filters: filters }).abortSignal(controller.signal);
+        if (controller.signal.aborted) return;
+        if (error) throw error;
+        setStats({ ...EMPTY_ADMIN_STATS, ...data } as AdminStats);
+      } catch {
+        if (!controller.signal.aborted) setQueryError('無法載入統計，請重試或聯絡系統管理者。');
+      } finally {
+        if (!controller.signal.aborted) setStatsLoading(false);
+      }
+    })();
+    return () => controller.abort();
+  }, [isAuthenticated, filters, reloadKey]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !supabase || (activeTab !== 'full' && activeTab !== 'skip')) return;
+    const controller = new AbortController();
+    setLoading(true);
+    setPageRows([]);
+    setPageTotal(0);
+    setQueryError('');
+    (async () => {
+      try {
+        const { data, error } = await supabase.rpc('admin_survey_page', {
+          p_filters: filters, p_kind: activeTab, p_offset: (currentPage - 1) * rowsPerPage,
+          p_limit: rowsPerPage, p_sort: sortConfig?.key || 'timestamp',
+          p_ascending: sortConfig?.direction === 'asc',
+        }).abortSignal(controller.signal);
+        if (controller.signal.aborted) return;
+        if (error) throw error;
+        const total = Number(data.total);
+        const lastPage = Math.max(1, Math.ceil(total / rowsPerPage));
+        if (currentPage > lastPage) { setCurrentPage(lastPage); return; }
+        setPageRows(data.rows);
+        setPageTotal(total);
+      } catch {
+        if (!controller.signal.aborted) setQueryError('無法載入填答資料，請重試或聯絡系統管理者。');
+      } finally {
+        if (!controller.signal.aborted) setLoading(false);
+      }
+    })();
+    return () => controller.abort();
+  }, [isAuthenticated, filters, activeTab, currentPage, rowsPerPage, sortConfig, reloadKey]);
+
+  const applyFilters = (next: AdminFilters) => {
+    const invalid = validateAdminFilters(next);
+    setFilterError(invalid || '');
+    if (invalid) return;
+    setPageRows([]);
+    setPageTotal(0);
+    setStats(EMPTY_ADMIN_STATS);
+    setFilters({ ...next, search: next.search.trim() });
     setCurrentPage(1);
-    setTableSearch('');
-  }, [activeTab, rowsPerPage]);
+    if (next.ranking !== 'all' && (activeTab === 'full' || activeTab === 'skip')) setActiveTab(next.ranking);
+  };
 
   useEffect(() => {
     const restoreAdminSession = async () => {
@@ -78,7 +218,6 @@ export default function Admin() {
       }
 
       setIsAuthenticated(true);
-      fetchData();
       fetchSettings();
       fetchLogs();
     };
@@ -91,6 +230,7 @@ export default function Admin() {
     if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
       direction = 'desc';
     }
+    setCurrentPage(1);
     setSortConfig({ key, direction });
   };
 
@@ -131,7 +271,6 @@ export default function Admin() {
       }
 
       setIsAuthenticated(true);
-      fetchData();
       fetchSettings();
       fetchLogs();
     } catch (err) {
@@ -159,116 +298,68 @@ export default function Admin() {
     }
   };
 
-  const formatDateTimeLocal = (dateString: string) => {
-    if (!dateString) return '';
-    const d = new Date(dateString);
-    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-    return d.toISOString().slice(0, 16);
+  const formatDateTimeLocal = taipeiInput;
+  const loadDraft = (next: SettingsDraft) => {
+    setAnnouncementDate(next.announcement_date);
+    setAnnouncementContent(next.announcement_content);
+    setCustomQuestions(next.custom_questions);
+    setSubjectScoreStartTime(next.subject_score_start_time);
+    setSubjectScoreEndTime(next.subject_score_end_time);
+    setSubjectScoreEnabled(next.subject_score_enabled);
+    setSystemStartTime(next.system_start_time);
+    setSystemEndTime(next.system_end_time);
+    setSystemEnabled(next.system_enabled);
   };
-
+  const acceptConfig = (raw: any, preserveDraft = false) => {
+    const next = toSettingsDraft(raw ? parseSurveyConfig(raw) : null);
+    setBaseline(next);
+    setConfigVersion({ id: raw?.id ?? null, revision: raw?.revision ?? null });
+    setBackups(raw?.custom_questions?.find((q: any) => q.id === '__SYSTEM_BACKUPS__')?.data || []);
+    if (!preserveDraft) loadDraft(next);
+    setRemoteConfig(null);
+    setSettingsError('');
+  };
   const fetchSettings = async () => {
+    if (!supabase) return;
+    setSettingsLoading(true);
     try {
-      if (!supabase) return;
-      const { data: rawData, error } = await supabase.from('survey_config').select('*').order('id', { ascending: true }).limit(1).maybeSingle();
-      if (error) throw error;
-      const data = rawData ? parseSurveyConfig(rawData) : null;
-      if (data) {
-        if (data.announcement_date) setAnnouncementDate(formatDateTimeLocal(data.announcement_date));
-        if (data.announcement_content) setAnnouncementContent({ ...DEFAULT_ANNOUNCEMENT_CONTENT, ...data.announcement_content });
-        if (data.custom_questions) {
-          const actualQs = data.custom_questions.filter((q: any) => q.id !== '__SYSTEM_BACKUPS__');
-          const backupsObj = data.custom_questions.find((q: any) => q.id === '__SYSTEM_BACKUPS__');
-          setCustomQuestions(actualQs);
-          if (backupsObj && backupsObj.data) {
-             setBackups(backupsObj.data);
-          }
-        }
-        if (data.subject_score_start_time) setSubjectScoreStartTime(formatDateTimeLocal(data.subject_score_start_time));
-        if (data.subject_score_end_time) setSubjectScoreEndTime(formatDateTimeLocal(data.subject_score_end_time));
-        if (data.subject_score_enabled !== undefined && data.subject_score_enabled !== null) setSubjectScoreEnabled(data.subject_score_enabled);
-        if (data.system_start_time) setSystemStartTime(formatDateTimeLocal(data.system_start_time));
-        if (data.system_end_time) setSystemEndTime(formatDateTimeLocal(data.system_end_time));
-        if (data.system_enabled !== undefined && data.system_enabled !== null) setSystemEnabled(data.system_enabled);
-      }
-    } catch (e) {
-      setError('無法載入問卷設定，請確認資料格式後重試。');
-      console.error(e);
-    }
+      const { data, error } = await supabase.from('survey_config').select('*').order('id').limit(1).maybeSingle();
+      if (error || (data && typeof data.revision !== 'number')) throw error || new Error('Missing settings version');
+      acceptConfig(data);
+    } catch {
+      setSettingsError('無法載入可編輯的設定，請重試或聯絡系統管理者。');
+    } finally { setSettingsLoading(false); }
   };
-
-  const saveSettings = async () => {
-    try {
-      setLoading(true);
-      setMessage('');
-      if (!supabase) throw new Error("Supabase is not configured");
-      const isoDate = new Date(announcementDate).toISOString();
-      
-      const backupToSave = {
-        timestamp: new Date().toISOString(),
-        announcement_date: isoDate,
-        announcement_content: announcementContent,
-        custom_questions: customQuestions,
-        subject_score_start_time: subjectScoreStartTime ? new Date(subjectScoreStartTime).toISOString() : null,
-        subject_score_end_time: subjectScoreEndTime ? new Date(subjectScoreEndTime).toISOString() : null,
-        subject_score_enabled: subjectScoreEnabled,
-        system_start_time: systemStartTime ? new Date(systemStartTime).toISOString() : null,
-        system_end_time: systemEndTime ? new Date(systemEndTime).toISOString() : null,
-        system_enabled: systemEnabled
-      };
-      const newBackups = [backupToSave, ...backups].slice(0, 3);
-      
-      const payload: any = {
-        ...backupToSave
-      };
-      delete payload.timestamp;
-      payload.custom_questions = [...customQuestions, { id: '__SYSTEM_BACKUPS__', data: newBackups }];
-      
-      // Try update first
-      const { data: existing } = await supabase.from('survey_config').select('id').order('id', { ascending: true }).limit(1).maybeSingle();
-      
-      let error;
-      if (existing) {
-        const res = await supabase.from('survey_config').update(payload).eq('id', existing.id);
-        if (res.error && (res.error.message.includes('subject_score_enabled') || res.error.message.includes('system_enabled') || res.error.message.includes('announcement_content') || res.error.message.includes('column'))) {
-           console.warn('survey_config columns missing, retrying without new ones');
-           delete payload.subject_score_enabled;
-           delete payload.system_enabled;
-           delete payload.system_start_time;
-           delete payload.system_end_time;
-           delete payload.announcement_content;
-           const retryRes = await supabase.from('survey_config').update(payload).eq('id', existing.id);
-           error = retryRes.error;
-        } else {
-           error = res.error;
-        }
-      } else {
-        const res = await supabase.from('survey_config').insert([payload]);
-        if (res.error && (res.error.message.includes('subject_score_enabled') || res.error.message.includes('system_enabled') || res.error.message.includes('announcement_content') || res.error.message.includes('column'))) {
-            console.warn('survey_config columns missing, retrying without new ones');
-            delete payload.subject_score_enabled;
-            delete payload.system_enabled;
-            delete payload.system_start_time;
-            delete payload.system_end_time;
-            delete payload.announcement_content;
-            const retryRes = await supabase.from('survey_config').insert([payload]);
-            error = retryRes.error;
-        } else {
-            error = res.error;
-        }
-      }
-
-      if (error) throw new Error(error.message);
-      setMessage('設定已成功儲存！');
-      setTimeout(() => setMessage(''), 3000);
-    } catch (err: any) {
-      console.error(err);
-      setError('儲存失敗：' + (err.message || '未知錯誤'));
-      if (err.message?.includes('relation "survey_config" does not exist')) {
-        setError('請先在 Supabase 建立 survey_config 資料表。');
-      }
-    } finally {
-      setLoading(false);
+  const preparePublish = async () => {
+    if (!baseline || saving || issues.errors.length) return;
+    setSettingsError('');
+    // Give an early warning; the publish RPC still compares revisions atomically.
+    const latest = await supabase.from('survey_config').select('*').order('id').limit(1).maybeSingle();
+    if (latest.error) { setSettingsError('無法確認線上版本，請稍後重試。'); return; }
+    if ((latest.data?.id ?? null) !== configVersion.id || (latest.data?.revision ?? null) !== configVersion.revision) {
+      setRemoteConfig({ current: latest.data });
     }
+    setShowSaveConfirm(true);
+  };
+  const saveSettings = async () => {
+    if (!baseline || saving || !dirty || issues.errors.length || remoteConfig) return;
+    setSaving(true);
+    setSettingsError('');
+    setMessage('');
+    try {
+      const { data, error } = await supabase.rpc('publish_survey_config', {
+        p_id: configVersion.id, p_revision: configVersion.revision, p_settings: settingsPayload(draft),
+      });
+      if (error) throw error;
+      if (data.status === 'conflict') { setRemoteConfig({ current: data.current }); return; }
+      if (data.status !== 'saved') throw new Error('Unexpected publish response');
+      acceptConfig(data.current);
+      setShowSaveConfirm(false);
+      setMessage('設定已成功發布。');
+      fetchData();
+    } catch (err: any) {
+      setSettingsError(err?.code === '22023' ? err.message : '發布失敗，請重試或聯絡系統管理者。');
+    } finally { setSaving(false); }
   };
 
   const addCustomQuestion = () => {
@@ -314,136 +405,76 @@ export default function Admin() {
       .join('\n');
   };
 
-  const fetchAllData = async (tableName: string) => {
-    let allData: any[] = [];
-    let page = 0;
-    const pageSize = 1000;
-    let hasMore = true;
-    while (hasMore) {
-      const { data, error } = await supabase.from(tableName).select('*').range(page * pageSize, (page + 1) * pageSize - 1);
-      if (error) throw new Error(error.message);
-      if (data && data.length > 0) {
-        allData = [...allData, ...data];
-        page++;
-        if (data.length < pageSize) hasMore = false;
-      } else {
-        hasMore = false;
-      }
-    }
-    return allData;
-  };
+  const fetchData = () => setReloadKey(key => key + 1);
 
-  const fetchData = async () => {
-    setLoading(true);
-    setError('');
+  const exportToCSV = async (exportType: SurveyKind) => {
+    if (!supabase || exporting || exportFields.length === 0) return;
+    const controller = new AbortController();
+    exportController.current = controller;
+    setExporting(true);
+    setExportProgress(0);
+    setQueryError('');
+    const capturedFilters = { ...filters };
+    const target = { label: { full: '完整填寫資料', skip: '無序位填寫資料', all: '全部資料' }[exportType] };
     try {
-      if (!supabase) throw new Error("Supabase is not configured");
-      
-      const [fullData, skipData] = await Promise.all([
-        fetchAllData('survey_responses_full'),
-        fetchAllData('survey_responses_skip_ranking')
-      ]);
-      
-      const combined = [...(fullData || []), ...(skipData || [])].sort((a, b) => 
-        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-      );
-      setData(combined);
-      setFullDataList((fullData || []).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
-      setSkipDataList((skipData || []).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
-    } catch (err: any) {
-      console.error(err);
-      setError('獲取資料失敗：' + (err.message || '未知錯誤'));
-    } finally {
-      setLoading(false);
-    }
-  };
+      const selectedFields = EXPORT_FIELDS.filter(([key]) => exportFields.includes(key));
+      const headers = selectedFields.map(([, label]) => label);
+      const generateRow = (row: any) => exportCsvRow(row, selectedFields.map(([key]) => key), includePersonal, formatCustomAnswers);
 
-  const filterRowsByExportDate = (rows: any[]) => {
-    const startTime = exportStartDate ? new Date(`${exportStartDate}T00:00:00`).getTime() : null;
-    const endTime = exportEndDate ? new Date(`${exportEndDate}T00:00:00`).getTime() + 24 * 60 * 60 * 1000 : null;
-
-    return rows.filter(row => {
-      const timestamp = new Date(row.timestamp).getTime();
-      return (!startTime || timestamp >= startTime) && (!endTime || timestamp < endTime);
-    });
-  };
-
-  const exportToCSV = (exportType: 'full' | 'skip' | 'all') => {
-    if (exportStartDate && exportEndDate && exportStartDate > exportEndDate) {
-      alert('開始日期不可晚於結束日期');
-      return;
-    }
-
-    const exportMap = {
-      full: {
-        label: '完整填寫資料',
-        rows: fullDataList
-      },
-      skip: {
-        label: '無序位填寫資料',
-        rows: skipDataList
-      },
-      all: {
-        label: '全部資料',
-        rows: data
+      // Only an explicit export downloads matching rows; normal navigation fetches one page.
+      const chunks: BlobPart[] = ['\uFEFF' + headers.map(toCsvCell).join(',')];
+      let exported = 0;
+      let afterSource = '';
+      let afterId = 0;
+      let fullMax: number | null = null;
+      let skipMax: number | null = null;
+      while (true) {
+        const { data, error } = await supabase.rpc('admin_survey_export_selected', {
+          p_filters: capturedFilters, p_kind: exportType, p_after_source: afterSource,
+          p_after_id: afterId, p_full_max: fullMax, p_skip_max: skipMax,
+          p_fields: selectedFields.map(([key]) => key), p_include_personal: includePersonal,
+        }).abortSignal(controller.signal);
+        if (controller.signal.aborted) return;
+        if (error) throw error;
+        fullMax = data.fullMax;
+        skipMax = data.skipMax;
+        if (!data.rows.length) break;
+        chunks.push('\n' + data.rows.map(generateRow).join('\n'));
+        exported += data.rows.length;
+        setExportProgress(exported);
+        const last = data.rows[data.rows.length - 1];
+        afterSource = last._source;
+        afterId = last.id;
       }
-    };
-
-    const target = exportMap[exportType];
-    const filteredRows = filterRowsByExportDate(target.rows);
-    if (filteredRows.length === 0) {
-      alert('指定時間範圍內沒有可匯出的資料');
-      return;
+      if (!exported) { setQueryError('目前篩選條件沒有可匯出的資料。'); return; }
+      const blob = new Blob(chunks, { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.href = url;
+      link.download = `會考落點分析_${target.label}_${new Date().toISOString().slice(0, 10)}.csv`;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setShowExportModal(false);
+    } catch {
+      if (!controller.signal.aborted) setQueryError('匯出失敗，請重試；未產生不完整的下載檔案。');
+    } finally {
+      if (exportController.current === controller) {
+        exportController.current = null;
+        setExporting(false);
+      }
     }
-
-    const headers = [
-      '填寫時間', '會考年度', '招生區', '身分', 
-      '國文', '數學', '英文', '社會', '自然', '作文',
-      '最小比率(%)', '最大比率(%)', '最小區間', '最大區間', 'Email', '邀請碼', '自訂題目回答'
-    ];
-
-    const generateRow = (row: any) => [
-      new Date(row.timestamp).toLocaleString('zh-TW'),
-      row.examYear,
-      row.region,
-      row.identity,
-      row.chineseScore,
-      row.mathScore,
-      row.englishScore,
-      row.socialScore,
-      row.scienceScore,
-      row.essayScore,
-      row.minRatio || '',
-      row.maxRatio || '',
-      row.minRankInterval || '',
-      row.maxRankInterval || '',
-      row.email,
-      row.inviteCode || '',
-      formatCustomAnswers(row.custom_answers)
-    ].map(toCsvCell).join(',');
-
-    const csvContent = [
-      headers.map(toCsvCell).join(','),
-      ...filteredRows.map(generateRow)
-    ].join('\n');
-
-    // Add BOM for Excel UTF-8 support
-    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.href = url;
-    link.download = `會考落點分析_${target.label}_${new Date().toISOString().slice(0, 10)}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
-    setShowExportModal(false);
   };
 
   const handleLogout = () => {
+    if (dirty && !window.confirm('尚有未儲存的設定，確定捨棄草稿並登出？')) return;
+    exportController.current?.abort();
     supabase?.auth.signOut();
     setIsAuthenticated(false);
-    setData([]);
-    setFullDataList([]);
-    setSkipDataList([]);
+    setBaseline(null);
+    setRemoteConfig(null);
+    setPageRows([]);
+    setPageTotal(0);
+    setStats(EMPTY_ADMIN_STATS);
   };
 
   if (!isAuthenticated) {
@@ -497,68 +528,21 @@ export default function Admin() {
     );
   }
 
-  // Calculate stats
-  const totalSubmissions = data.length;
-  
-  // Data aggregation for charts
-  const regionCounts = data.reduce((acc, curr) => {
-    acc[curr.region] = (acc[curr.region] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
-  const regionChartData = Object.keys(regionCounts).map(key => ({ name: key, count: regionCounts[key] })).sort((a,b)=> b.count - a.count);
-
-  const identityCounts = data.reduce((acc, curr) => {
-    const id = curr.identity || '未提供';
-    acc[id] = (acc[id] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
-  const identityChartData = Object.keys(identityCounts).map(key => ({ name: key, count: identityCounts[key] }));
-
-  const scoreMap: Record<string, number> = {'A++': 7, 'A+': 6, 'A': 5, 'B++': 4, 'B+': 3, 'B': 2, 'C': 1, '': 0};
-  const totalScoreCounts = data.reduce((acc, curr) => {
-    const points = (scoreMap[curr.chineseScore || ''] || 0) + 
-                   (scoreMap[curr.mathScore || ''] || 0) + 
-                   (scoreMap[curr.englishScore || ''] || 0) + 
-                   (scoreMap[curr.socialScore || ''] || 0) + 
-                   (scoreMap[curr.scienceScore || ''] || 0);
-    let rangeLabel = '未完整填寫';
-    if (points > 0) {
-      const lower = Math.floor(points / 5) * 5;
-      const upper = lower + 4;
-      rangeLabel = `${lower}-${upper} 積分`;
-    }
-    acc[rangeLabel] = (acc[rangeLabel] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
-  const totalScoreChartData = Object.keys(totalScoreCounts)
-    .map(key => ({ name: key, count: totalScoreCounts[key] }))
-    .sort((a, b) => {
-      if (a.name === '未完整填寫') return 1;
-      if (b.name === '未完整填寫') return -1;
-      const aVal = parseInt(a.name.split('-')[0]) || 0;
-      const bVal = parseInt(b.name.split('-')[0]) || 0;
-      return bVal - aVal;
-    });
-
-  const dailyCounts = data.reduce((acc, curr) => {
-    const dateStr = new Date(curr.timestamp).toLocaleDateString('zh-TW', { month: '2-digit', day: '2-digit' });
-    acc[dateStr] = (acc[dateStr] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
-  const dailyTrendData = Object.keys(dailyCounts)
-    .map(key => ({ date: key, count: dailyCounts[key] }))
-    .sort((a, b) => a.date.localeCompare(b.date));
+  const regionChartData = stats.regions;
+  const identityChartData = stats.identities;
+  const totalScoreChartData = stats.scores;
+  const dailyTrendData = stats.days;
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans">
       <Header onShareClick={() => setIsShareOpen(true)} />
       <div className="pt-24 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto pb-12">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-8 gap-4">
-          <h1 className="text-2xl sm:text-3xl font-black flex items-center gap-3 text-slate-900">
+          <div><h1 className="text-2xl sm:text-3xl font-black flex items-center gap-3 text-slate-900">
             <LayoutDashboard className="w-6 h-6 sm:w-8 sm:h-8 text-blue-600" />
             管理員分析看板
-          </h1>
-          <div className="flex flex-wrap gap-2 sm:gap-4 w-full sm:w-auto">
+          </h1><Link to="/" className="mt-2 inline-block text-sm underline text-slate-600">返回首頁</Link></div>
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:gap-4 w-full sm:w-auto whitespace-nowrap">
             <button 
               onClick={() => window.open(window.location.pathname + '#/', '_blank')}
               className="flex-1 sm:flex-none px-4 py-2 border-2 border-slate-900 bg-sky-200 font-bold flex items-center justify-center gap-2 shadow-[2px_2px_0_#0F172A] hover:translate-y-0.5 hover:shadow-none transition-all text-slate-900"
@@ -568,8 +552,8 @@ export default function Admin() {
               <span className="sm:hidden">前台</span>
             </button>
             <button 
-              onClick={() => setShowExportModal(true)} 
-              disabled={data.length === 0}
+              onClick={() => { setIncludePersonal(false); setShowExportModal(true); }}
+              disabled={statsLoading || stats.total === 0 || exporting}
               className="flex-1 sm:flex-none px-4 py-2 border-2 border-slate-900 bg-emerald-400 font-bold flex items-center justify-center gap-2 shadow-[2px_2px_0_#0F172A] hover:translate-y-0.5 hover:shadow-none transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Download className="w-5 h-5" />
@@ -580,7 +564,7 @@ export default function Admin() {
               onClick={fetchData} 
               className="flex-1 sm:flex-none px-4 py-2 border-2 border-slate-900 bg-white font-bold hover:bg-slate-100 flex items-center justify-center gap-2 shadow-[2px_2px_0_#0F172A] hover:translate-y-0.5 hover:shadow-none transition-all"
             >
-              {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : '重新載入'}
+              {loading || statsLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : '重新載入'}
             </button>
             <button 
               onClick={handleLogout} 
@@ -596,12 +580,7 @@ export default function Admin() {
         {error && (
           <div className="bg-red-50 text-red-700 p-4 border-2 border-red-500 font-bold mb-6 flex flex-col sm:flex-row">
             <span>{error}</span>
-            <span className="sm:ml-auto text-sm mt-2 sm:mt-0 text-right">
-              提示：確認 Supabase 設定與資料表權限<br/>
-              若是設定儲存失敗，請確認 survey_config 資料表是否開啟且包含以下欄位:<br/>
-              subject_score_start_time (timestamptz), subject_score_end_time (timestamptz), subject_score_enabled (boolean)<br/>
-              system_start_time (timestamptz), system_end_time (timestamptz), system_enabled (boolean)
-            </span>
+
           </div>
         )}
 
@@ -610,6 +589,53 @@ export default function Admin() {
             {message}
           </div>
         )}
+
+        {dirty && <div role="status" className="mb-4 border-2 border-amber-400 bg-amber-50 p-4 font-bold text-amber-900">有 {changes.length} 項未儲存變更；切換管理分頁會保留草稿，發布後才會生效。</div>}
+        {settingsError && <div role="alert" className="mb-4 bg-red-50 p-4 text-red-700">{settingsError} {!baseline && <button onClick={fetchSettings} className="underline">重新載入設定</button>}</div>}
+        {remoteConfig && !showSaveConfirm && <div role="alert" className="mb-4 border-2 border-amber-400 p-4">線上設定已有新版本，可能來自其他管理員或分頁。您的草稿仍保留。<button onClick={() => setShowSaveConfirm(true)} className="ml-3 underline font-bold">比較最新版本</button></div>}
+
+        <form onSubmit={event => { event.preventDefault(); applyFilters(draftFilters); }} className="mb-6 border-2 border-slate-300 bg-white p-4 sm:p-6">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h2 className="font-black text-lg">資料篩選</h2>
+            <span className="text-sm text-slate-500" role="status">{statsLoading ? '統計載入中…' : `符合條件 ${stats.total} 筆`}</span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {([
+              ['examYear', '會考年度', stats.years],
+              ['region', '招生區', stats.regionOptions],
+              ['identity', '身分', stats.identityOptions],
+            ] as const).map(([key, label, options]) => (
+              <label key={key} className="text-sm font-bold">{label}
+                <select aria-label={label} value={draftFilters[key]} onChange={event => setDraftFilters(prev => ({ ...prev, [key]: event.target.value }))} className="mt-1 w-full border-2 border-slate-300 p-2 bg-white">
+                  <option value="">全部</option>
+                  {Array.from(new Set([...options, draftFilters[key]].filter(Boolean))).map(value => <option key={value} value={value}>{value}</option>)}
+                </select>
+              </label>
+            ))}
+            <label className="text-sm font-bold">序位資料
+              <select aria-label="序位資料" value={draftFilters.ranking} onChange={event => setDraftFilters(prev => ({ ...prev, ranking: event.target.value as SurveyKind }))} className="mt-1 w-full border-2 border-slate-300 p-2 bg-white">
+                <option value="all">全部</option><option value="full">有提供序位</option><option value="skip">未提供序位</option>
+              </select>
+            </label>
+            <label className="text-sm font-bold">開始日期（台北時間）
+              <input type="date" value={draftFilters.startDate} onChange={event => setDraftFilters(prev => ({ ...prev, startDate: event.target.value }))} className="mt-1 w-full border-2 border-slate-300 p-2" />
+            </label>
+            <label className="text-sm font-bold">結束日期（包含當日）
+              <input type="date" value={draftFilters.endDate} onChange={event => setDraftFilters(prev => ({ ...prev, endDate: event.target.value }))} className="mt-1 w-full border-2 border-slate-300 p-2" />
+            </label>
+            <label className="text-sm font-bold sm:col-span-2">關鍵字
+              <input type="search" placeholder="搜尋 Email、成績或自訂回答…" value={draftFilters.search} onChange={event => setDraftFilters(prev => ({ ...prev, search: event.target.value }))} className="mt-1 w-full border-2 border-slate-300 p-2" />
+            </label>
+          </div>
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <button type="submit" className="border-2 border-slate-900 bg-emerald-300 px-4 py-2 font-bold">套用篩選</button>
+            <button type="button" onClick={() => { setDraftFilters({ ...EMPTY_ADMIN_FILTERS }); applyFilters({ ...EMPTY_ADMIN_FILTERS }); }} className="border-2 border-slate-300 px-4 py-2 font-bold">清除篩選</button>
+            <span className="text-xs text-slate-500">圖表、資料列表與匯出共用篩選；列表分頁另依所選資料類別顯示。</span>
+          </div>
+          {JSON.stringify(draftFilters) !== JSON.stringify(filters) && <p className="mt-3 text-sm text-amber-700">篩選條件已變更，按「套用篩選」後生效。</p>}
+          {filterError && <p role="alert" className="mt-3 text-red-700">{filterError}</p>}
+        </form>
+        {queryError && <div role="alert" className="mb-6 border-2 border-red-400 bg-red-50 p-4 text-red-700">{queryError} <button type="button" onClick={fetchData} className="underline font-bold">重試</button></div>}
 
         <div className="flex border-b-2 border-slate-300 mb-8 overflow-x-auto whitespace-nowrap">
           {[
@@ -622,7 +648,7 @@ export default function Admin() {
           ].map(tab => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
+              onClick={() => { if (activeTab !== tab.id) { setActiveTab(tab.id as any); setCurrentPage(1); setPageRows([]); } }}
               className={`px-6 py-3 font-bold text-sm sm:text-base border-b-4 transition-colors ${activeTab === tab.id ? 'border-emerald-500 text-emerald-700 bg-emerald-50/50' : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-800'}`}
             >
               {tab.label}
@@ -632,34 +658,26 @@ export default function Admin() {
 
         {activeTab === 'overview' && (
           <>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-              <div className="bg-white border-2 border-slate-900 shadow-[4px_4px_0_#0F172A] p-6">
-                <p className="text-slate-500 font-bold text-xs sm:text-sm tracking-widest uppercase mb-2 flex items-center">
-                  <Users className="w-4 h-4 mr-2" /> 總提交筆數
-                </p>
-                <p className="text-4xl sm:text-5xl font-black text-slate-900">{totalSubmissions}</p>
-              </div>
-              <div className="bg-white border-2 border-slate-900 shadow-[4px_4px_0_#0F172A] p-6">
-                <p className="text-slate-500 font-bold text-xs sm:text-sm tracking-widest uppercase mb-2 flex items-center">
-                  <ClipboardList className="w-4 h-4 mr-2" /> 完整序位筆數
-                </p>
-                <p className="text-4xl sm:text-5xl font-black text-slate-900">{fullDataList.length}</p>
-              </div>
-              <div className="bg-white border-2 border-slate-900 shadow-[4px_4px_0_#0F172A] p-6">
-                <p className="text-slate-500 font-bold text-xs sm:text-sm tracking-widest uppercase mb-2 flex items-center">
-                  <Calendar className="w-4 h-4 mr-2" /> 今日新增筆數
-                </p>
-                <p className="text-4xl sm:text-5xl font-black text-slate-900">
-                  {data.filter(d => new Date(d.timestamp).toDateString() === new Date().toDateString()).length}
-                </p>
-              </div>
+            <div className="mb-6 border-2 border-slate-300 bg-white p-4 flex flex-wrap items-center justify-between gap-3">
+              <div><p className="text-sm text-slate-500">目前線上表單狀態（依已發布設定）</p><p className="font-black text-xl">{statsLoading ? '載入中…' : ({open:'開放填寫',closed:'已關閉',scheduled:'尚未開始',ended:'已結束',missing:'尚未設定'} as Record<string,string>)[stats.formStatus.state] || '無法確認'}</p></div>
+              <div className="text-xs text-slate-500">{stats.formStatus.start && <p>開始：{taipeiInput(stats.formStatus.start).replace('T',' ')}</p>}{stats.formStatus.end && <p>結束：{taipeiInput(stats.formStatus.end).replace('T',' ')}</p>}{stats.formStatus.checkedAt && <p>更新：{taipeiInput(stats.formStatus.checkedAt).replace('T',' ')}</p>}<p>台北時間；重新載入可更新狀態。</p></div>
+            </div>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+              {([['符合條件樣本',stats.total],['今日新增',stats.today],['有效樣本',stats.valid],['提供序位',stats.full]] as const).map(([label,value]) => <div key={label} className="bg-white border-2 border-slate-900 shadow-[4px_4px_0_#0F172A] p-4 sm:p-6"><p className="text-slate-500 font-bold text-sm mb-2">{label}</p><p className="text-3xl sm:text-4xl font-black">{statsLoading ? '…' : value}</p></div>)}
+            </div>
+            <p className="mb-6 text-xs text-slate-500">有效樣本：五科成績完整且選項有效；有提供序位者，序位與比率區間也須合法。此數字不代表已驗證填答真實性。所有數量均套用目前篩選。</p>
+            <div className="mb-8 border-2 border-slate-900 bg-white p-4 sm:p-6">
+              <h3 className="font-bold text-lg mb-4">近七日填寫趨勢</h3>
+              <div className="h-64"><ResponsiveContainer width="100%" height="100%"><AreaChart data={stats.recentDays}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="date" tick={{fontSize:11}} /><YAxis allowDecimals={false} /><Tooltip /><Area type="monotone" dataKey="count" name="新增筆數" stroke="#059669" fill="#A7F3D0" /></AreaChart></ResponsiveContainer></div>
+              <p className="text-xs text-slate-500 mt-2">含今日的七個台北日期，無填答日顯示 0；同樣套用目前篩選。</p>
             </div>
 
+            <div className="mb-6 flex flex-wrap gap-2" aria-label="各區樣本數">{stats.regions.map(region => <span key={region.name} className="border border-slate-300 bg-white px-3 py-2 text-sm">{region.name}：<strong>{region.count}</strong> 筆</span>)}</div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
               <div className="bg-white border-2 border-slate-900 p-4 sm:p-6 shadow-[4px_4px_0_#0F172A]">
                 <h3 className="text-lg sm:text-xl font-bold mb-6 flex items-center pb-2 border-b-2 border-slate-100">
                   <MapPin className="w-5 h-5 mr-2 text-rose-500" />
-                  各區填寫人數分佈
+                  各區樣本量
                 </h3>
                 <div className="h-64 sm:h-80 w-full">
                   <ResponsiveContainer width="100%" height="100%">
@@ -754,14 +772,8 @@ export default function Admin() {
                 </h3>
               </div>
               <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  placeholder="搜尋資料..."
-                  value={tableSearch}
-                  onChange={(e) => { setTableSearch(e.target.value); setCurrentPage(1); }}
-                  className="border-2 border-slate-300 px-3 py-1 text-sm focus:border-slate-900 focus:outline-none"
-                />
                 <select
+                  aria-label="每頁筆數"
                   value={rowsPerPage}
                   onChange={(e) => { setRowsPerPage(Number(e.target.value)); setCurrentPage(1); }}
                   className="border-2 border-slate-300 px-2 py-1 text-sm focus:border-slate-900 focus:outline-none bg-white"
@@ -774,40 +786,9 @@ export default function Admin() {
             </div>
             
             {(() => {
-              const baseData = activeTab === 'full' ? fullDataList : skipDataList;
-              const filteredData = baseData.filter(row => {
-                if (!tableSearch) return true;
-                const searchStr = `${row.region} ${row.identity} ${row.examYear} ${row.chineseScore} ${row.mathScore} ${row.englishScore} ${row.socialScore} ${row.scienceScore} ${row.email || ''} ${formatCustomAnswers(row.custom_answers)}`.toLowerCase();
-                return searchStr.includes(tableSearch.toLowerCase());
-              });
-
-              const sortedData = [...filteredData].sort((a, b) => {
-                if (!sortConfig) return 0;
-                
-                let valA = a[sortConfig.key];
-                let valB = b[sortConfig.key];
-                
-                if (sortConfig.key === 'timestamp') {
-                  valA = new Date(a.timestamp).getTime();
-                  valB = new Date(b.timestamp).getTime();
-                } else if (sortConfig.key === 'totalScore') {
-                  const scoreMap: Record<string, number> = {'A++': 7, 'A+': 6, 'A': 5, 'B++': 4, 'B+': 3, 'B': 2, 'C': 1, '': 0};
-                  const getPoints = (s: any) => (scoreMap[s?.chineseScore || ''] || 0) + (scoreMap[s?.mathScore || ''] || 0) + (scoreMap[s?.englishScore || ''] || 0) + (scoreMap[s?.socialScore || ''] || 0) + (scoreMap[s?.scienceScore || ''] || 0);
-                  valA = getPoints(a);
-                  valB = getPoints(b);
-                } else if (sortConfig.key === 'examYear') {
-                  valA = parseInt(a.examYear || '0', 10);
-                  valB = parseInt(b.examYear || '0', 10);
-                }
-                
-                if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
-                if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
-                return 0;
-              });
-
-              const totalPages = Math.ceil(sortedData.length / rowsPerPage) || 1;
+              const totalPages = Math.max(1, Math.ceil(pageTotal / rowsPerPage));
               const startIndex = (currentPage - 1) * rowsPerPage;
-              const paginatedData = sortedData.slice(startIndex, startIndex + rowsPerPage);
+              const paginatedData = pageRows;
 
               return (
                 <>
@@ -902,7 +883,7 @@ export default function Admin() {
                         {paginatedData.length === 0 && (
                           <tr>
                             <td colSpan={10} className="px-6 py-12 text-center text-slate-500 font-bold">
-                              目前尚無資料
+                              {loading ? '資料載入中…' : queryError ? '資料載入失敗，請重試' : '目前篩選條件沒有資料'}
                             </td>
                           </tr>
                         )}
@@ -912,12 +893,12 @@ export default function Admin() {
                   
                   <div className="p-4 sm:p-5 border-t-2 border-slate-900 flex flex-col sm:flex-row justify-between items-center gap-4 bg-slate-50">
                     <span className="text-sm font-bold text-slate-600">
-                      顯示 {filteredData.length === 0 ? 0 : startIndex + 1} 到 {Math.min(startIndex + rowsPerPage, filteredData.length)} 筆，共 {filteredData.length} 筆
+                      顯示 {pageTotal === 0 ? 0 : startIndex + 1} 到 {Math.min(startIndex + rowsPerPage, pageTotal)} 筆，共 {pageTotal} 筆
                     </span>
                     <div className="flex gap-2">
                       <button 
                         onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                        disabled={currentPage === 1}
+                        disabled={loading || currentPage === 1}
                         className="px-3 py-1 font-bold text-sm bg-white border-2 border-slate-300 rounded hover:border-slate-900 disabled:opacity-50 disabled:hover:border-slate-300 transition-colors"
                       >
                         上一頁
@@ -927,7 +908,7 @@ export default function Admin() {
                       </span>
                       <button 
                         onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                        disabled={currentPage === totalPages}
+                        disabled={loading || currentPage >= totalPages}
                         className="px-3 py-1 font-bold text-sm bg-white border-2 border-slate-300 rounded hover:border-slate-900 disabled:opacity-50 disabled:hover:border-slate-300 transition-colors"
                       >
                         下一頁
@@ -941,7 +922,7 @@ export default function Admin() {
         )}
 
         {activeTab === 'settings' && (
-          <div className="space-y-8 mb-12">
+          <fieldset disabled={!baseline || saving || settingsLoading} className="space-y-8 mb-12 disabled:opacity-60">
             <div className="bg-white border-2 border-slate-900 p-6 sm:p-8 shadow-[4px_4px_0_#0F172A]">
               <h3 className="text-xl font-bold mb-6 pb-2 border-b-2 border-slate-100 flex items-center">
                 系統設定
@@ -969,7 +950,7 @@ export default function Admin() {
                       <div className="flex-1">
                         <label className="block text-sm text-slate-500 mb-1">開放開始時間</label>
                         <input 
-                          type="datetime-local" 
+                          type="datetime-local" step="any" aria-label="表單開始時間"
                           value={systemStartTime} 
                           onChange={(e) => setSystemStartTime(e.target.value)}
                           className="border-2 border-slate-200 p-3 w-full focus:border-slate-900 focus:outline-none bg-white font-mono text-sm"
@@ -978,7 +959,7 @@ export default function Admin() {
                       <div className="flex-1">
                         <label className="block text-sm text-slate-500 mb-1">開放結束時間</label>
                         <input 
-                          type="datetime-local" 
+                          type="datetime-local" step="any" aria-label="表單結束時間"
                           value={systemEndTime} 
                           onChange={(e) => setSystemEndTime(e.target.value)}
                           className="border-2 border-slate-200 p-3 w-full focus:border-slate-900 focus:outline-none bg-white font-mono text-sm"
@@ -994,7 +975,7 @@ export default function Admin() {
                 <label className="block font-bold text-slate-700 mb-2">序位資訊公告時間</label>
                 <div className="flex flex-col sm:flex-row gap-3">
                   <input 
-                    type="datetime-local" 
+                    type="datetime-local" step="any" aria-label="序位公告時間"
                     value={announcementDate} 
                     onChange={(e) => setAnnouncementDate(e.target.value)}
                     className="border-2 border-slate-300 p-3 w-full sm:w-auto flex-1 focus:border-slate-900 focus:outline-none"
@@ -1051,7 +1032,7 @@ export default function Admin() {
                       <div className="flex-1">
                         <label className="block text-sm text-slate-500 mb-1">開放開始時間</label>
                         <input 
-                          type="datetime-local" 
+                          type="datetime-local" step="any" aria-label="成績輸入開始時間"
                           value={subjectScoreStartTime} 
                           onChange={(e) => setSubjectScoreStartTime(e.target.value)}
                           className="border-2 border-slate-300 p-3 w-full focus:border-slate-900 focus:outline-none"
@@ -1060,7 +1041,7 @@ export default function Admin() {
                       <div className="flex-1">
                         <label className="block text-sm text-slate-500 mb-1">開放結束時間</label>
                         <input 
-                          type="datetime-local" 
+                          type="datetime-local" step="any" aria-label="成績輸入結束時間"
                           value={subjectScoreEndTime} 
                           onChange={(e) => setSubjectScoreEndTime(e.target.value)}
                           className="border-2 border-slate-300 p-3 w-full focus:border-slate-900 focus:outline-none"
@@ -1158,7 +1139,7 @@ export default function Admin() {
                             開放填寫開始時間 <span className="text-slate-400 font-medium ml-2 text-xs">(選填)</span>
                           </label>
                           <input 
-                            type="datetime-local" 
+                            type="datetime-local" step="any"
                             value={q.startTime || ''} 
                             onChange={(e) => updateQuestion(q.id, { startTime: e.target.value })}
                             className="w-full border-2 border-slate-300 p-3 font-bold text-slate-700 focus:border-slate-900 focus:outline-none focus:shadow-[4px_4px_0_#0F172A] transition-all"
@@ -1170,7 +1151,7 @@ export default function Admin() {
                             開放填寫結束時間 <span className="text-slate-400 font-medium ml-2 text-xs">(選填)</span>
                           </label>
                           <input 
-                            type="datetime-local" 
+                            type="datetime-local" step="any"
                             value={q.endTime || ''} 
                             onChange={(e) => updateQuestion(q.id, { endTime: e.target.value })}
                             className="w-full border-2 border-slate-300 p-3 font-bold text-slate-700 focus:border-slate-900 focus:outline-none focus:shadow-[4px_4px_0_#0F172A] transition-all"
@@ -1205,15 +1186,19 @@ export default function Admin() {
             </div>
 
             <div className="pt-4 border-t-4 border-slate-900 mt-8">
+              <p className="mb-3 text-sm text-slate-500">所有開放時間均為台北時間（UTC+8）。</p>
+              {issues.errors.map(text => <p key={text} role="alert" className="mb-2 text-red-700">{text}</p>)}
+              {issues.warnings.map(text => <p key={text} className="mb-2 text-amber-700">{text}</p>)}
               <button 
-                onClick={() => setShowSaveConfirm(true)}
+                onClick={preparePublish}
+                disabled={!dirty || saving || issues.errors.length > 0}
                 className="w-full py-4 bg-emerald-400 text-slate-900 font-black text-xl border-2 border-slate-900 shadow-[6px_6px_0_#0F172A] hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-all flex items-center justify-center"
               >
-                {loading ? <Loader2 className="w-6 h-6 animate-spin mr-2" /> : null}
+                {loading || statsLoading ? <Loader2 className="w-6 h-6 animate-spin mr-2" /> : null}
                 儲存所有設定
               </button>
             </div>
-          </div>
+          </fieldset>
         )}
 
         {activeTab === 'backups' && (
@@ -1255,15 +1240,7 @@ export default function Admin() {
                         <button 
                           onClick={() => {
                             if (window.confirm('確定要載入此版本？\n此操作將覆蓋您目前尚未儲存的設定（直到您手動點擊「儲存所有設定」才會生效）')) {
-                              if (bk.announcement_date) setAnnouncementDate(formatDateTimeLocal(bk.announcement_date));
-                              if (bk.announcement_content) setAnnouncementContent({ ...DEFAULT_ANNOUNCEMENT_CONTENT, ...bk.announcement_content });
-                              if (bk.custom_questions) setCustomQuestions(bk.custom_questions);
-                              if (bk.subject_score_start_time) setSubjectScoreStartTime(formatDateTimeLocal(bk.subject_score_start_time));
-                              if (bk.subject_score_end_time) setSubjectScoreEndTime(formatDateTimeLocal(bk.subject_score_end_time));
-                              setSubjectScoreEnabled(bk.subject_score_enabled ?? true);
-                              if (bk.system_start_time) setSystemStartTime(formatDateTimeLocal(bk.system_start_time));
-                              if (bk.system_end_time) setSystemEndTime(formatDateTimeLocal(bk.system_end_time));
-                              setSystemEnabled(bk.system_enabled ?? true);
+                              loadDraft(toSettingsDraft(bk));
                               alert('已載入該版本設定！若要正式生效發佈，請回到「系統設定與自訂問卷」並點擊最下方「儲存所有設定」。');
                               setActiveTab('settings');
                             }
@@ -1651,15 +1628,7 @@ export default function Admin() {
                 onClick={() => {
                   if (window.confirm('確定要載入此版本？\n此操作將覆蓋您目前尚未儲存的設定（直到您手動點擊「儲存所有設定」才會生效）')) {
                     const bk = showBackupPreview;
-                    if (bk.announcement_date) setAnnouncementDate(formatDateTimeLocal(bk.announcement_date));
-                    if (bk.announcement_content) setAnnouncementContent({ ...DEFAULT_ANNOUNCEMENT_CONTENT, ...bk.announcement_content });
-                    if (bk.custom_questions) setCustomQuestions(bk.custom_questions);
-                    if (bk.subject_score_start_time) setSubjectScoreStartTime(formatDateTimeLocal(bk.subject_score_start_time));
-                    if (bk.subject_score_end_time) setSubjectScoreEndTime(formatDateTimeLocal(bk.subject_score_end_time));
-                    setSubjectScoreEnabled(bk.subject_score_enabled ?? true);
-                    if (bk.system_start_time) setSystemStartTime(formatDateTimeLocal(bk.system_start_time));
-                    if (bk.system_end_time) setSystemEndTime(formatDateTimeLocal(bk.system_end_time));
-                    setSystemEnabled(bk.system_enabled ?? true);
+                    loadDraft(toSettingsDraft(bk));
                     setShowBackupPreview(null);
                     alert('已載入該版本設定！若要正式生效發佈，請點擊最下方「儲存所有設定」。');
                   }
@@ -1680,63 +1649,39 @@ export default function Admin() {
       )}
 
       {showSaveConfirm && (
-        <div className="fixed inset-0 bg-slate-900/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white border-4 border-slate-900 p-8 max-w-md w-full shadow-[8px_8px_0_#0F172A] relative text-center">
-            <button onClick={() => setShowSaveConfirm(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-900 transition-colors">
-              <X className="w-6 h-6" />
-            </button>
-            <div className="mx-auto w-16 h-16 bg-amber-100 text-amber-600 flex items-center justify-center rounded-full border-2 border-amber-200 mb-6 mt-2 shadow-[4px_4px_0_#FCD34D]">
-              <Settings className="w-8 h-8" />
+        <div className="fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center p-4">
+          <section role="dialog" aria-modal="true" aria-labelledby="publish-title" data-admin-modal tabIndex={-1} className="bg-white border-4 border-slate-900 p-4 sm:p-6 max-w-4xl w-full max-h-[90dvh] overflow-y-auto shadow-[8px_8px_0_#0F172A]">
+            <h2 id="publish-title" className="text-2xl font-black mb-3">發布前設定比較</h2>
+            <p className="mb-4 text-sm text-slate-600">原設定 → 新設定。確認發布後立即生效；所有時間為台北時間。</p>
+            {remoteConfig && <div role="alert" className="mb-4 border-2 border-amber-500 bg-amber-50 p-4">
+              <p className="font-bold">線上版本已更新，這次發布已被擋下，您的草稿仍保留。</p>
+              <p className="mt-2 text-sm">下方先比較您載入的原設定與草稿。選擇「以最新版重新比較」後，原設定會換成最新線上版本，再次確認才能發布。</p>
+              <div className="mt-3 flex flex-wrap gap-3">
+                <button disabled={saving} onClick={() => acceptConfig(remoteConfig.current, true)} className="border-2 border-slate-900 px-3 py-2 font-bold">保留草稿，以最新版重新比較</button>
+                <button disabled={saving} onClick={() => { if (window.confirm('確定捨棄目前草稿，載入最新線上設定？')) { acceptConfig(remoteConfig.current); setShowSaveConfirm(false); } }} className="border-2 border-slate-300 px-3 py-2">捨棄草稿並載入線上版本</button>
+              </div>
+            </div>}
+            <div className="overflow-x-auto">
+              <table className="w-full table-fixed text-left text-sm border-collapse">
+                <thead><tr className="bg-slate-100"><th className="p-3 w-1/4">設定項目</th><th className="p-3">原設定</th><th className="p-3">新設定</th></tr></thead>
+                <tbody>{changes.map((change, index) => <tr key={index} className="border-b border-slate-200 align-top"><th className="p-3 break-words">{change.label}</th><td className="p-3 whitespace-pre-wrap break-words text-slate-600">{change.before}</td><td className="p-3 whitespace-pre-wrap break-words bg-emerald-50">{change.after}</td></tr>)}</tbody>
+              </table>
             </div>
-            <h3 className="text-2xl font-black text-slate-900 mb-2">確認發佈最新設定？</h3>
-            <p className="text-sm font-bold text-slate-600 mb-6 leading-relaxed">
-              請再次確認您目前要發佈的內容是否正確。<br/>按下「確認發佈」後，最新設定與自訂問卷將立即於使用者前台生效！
-            </p>
-            
-            <div className="text-left bg-slate-50 p-4 border-2 border-slate-200 mb-8 text-sm text-slate-700 space-y-3 font-medium">
-              <div className="flex border-b border-slate-200 pb-2">
-                <span className="w-32 font-bold text-slate-900 shrink-0">表單系統狀態</span>
-                <span>{systemEnabled ? `✅ 開放中` : '❌ 關閉中'}</span>
-              </div>
-              <div className="flex border-b border-slate-200 pb-2">
-                <span className="w-32 font-bold text-slate-900 shrink-0">成績/序位收集</span>
-                <span>{subjectScoreEnabled ? `✅ 開放中` : '❌ 關閉中'}</span>
-              </div>
-              <div className="flex border-b border-slate-200 pb-2">
-                <span className="w-32 font-bold text-slate-900 shrink-0">序位公告時間</span>
-                <span className="text-emerald-600">{announcementDate ? new Date(announcementDate).toLocaleString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '未設定'}</span>
-              </div>
-              <div className="flex">
-                <span className="w-32 font-bold text-slate-900 shrink-0">自訂問卷題目</span>
-                <span>共 {customQuestions.length} 題</span>
-              </div>
+            {!changes.length && <p className="py-6 text-center">沒有待發布的變更。</p>}
+            {issues.errors.map(text => <p key={text} role="alert" className="mt-3 text-red-700">{text}</p>)}
+            {issues.warnings.map(text => <p key={text} className="mt-3 text-amber-700">提醒：{text}</p>)}
+            {settingsError && <p role="alert" className="mt-3 text-red-700">{settingsError}</p>}
+            <div className="mt-6 flex justify-end gap-3">
+              <button disabled={saving} onClick={() => setShowSaveConfirm(false)} className="border-2 border-slate-300 px-4 py-3 font-bold">返回編輯</button>
+              <button disabled={saving || !dirty || issues.errors.length > 0 || !!remoteConfig} onClick={saveSettings} className="border-2 border-slate-900 bg-emerald-300 px-4 py-3 font-black disabled:opacity-50">{saving ? '發布中…' : '確認發佈'}</button>
             </div>
-
-            <div className="flex gap-4">
-              <button 
-                onClick={() => setShowSaveConfirm(false)}
-                className="flex-1 py-3 border-2 border-slate-900 bg-slate-100 text-slate-900 font-black hover:bg-slate-200 transition-colors"
-              >
-                取消
-              </button>
-              <button 
-                onClick={() => {
-                  setShowSaveConfirm(false);
-                  saveSettings();
-                }}
-                className="flex-1 py-3 border-2 border-slate-900 bg-emerald-400 text-slate-900 font-black shadow-[4px_4px_0_#0F172A] hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-all flex items-center justify-center"
-              >
-                {loading ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : null}
-                確認發佈
-              </button>
-            </div>
-          </div>
+          </section>
         </div>
       )}
 
       {showExportModal && (
         <div className="fixed inset-0 bg-slate-900/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white border-4 border-slate-900 shadow-[8px_8px_0_#0F172A] p-6 sm:p-8 max-w-lg w-full animate-in fade-in zoom-in duration-200">
+          <div role="dialog" aria-modal="true" aria-label="CSV 匯出選項" data-admin-modal tabIndex={-1} className="bg-white border-4 border-slate-900 shadow-[8px_8px_0_#0F172A] p-6 sm:p-8 max-w-2xl w-full max-h-[90dvh] overflow-y-auto animate-in fade-in zoom-in duration-200">
             <div className="flex justify-between items-center mb-6 pb-4 border-b-2 border-slate-100">
               <div>
                 <h3 className="text-2xl font-extrabold flex items-center text-slate-900">
@@ -1746,7 +1691,7 @@ export default function Admin() {
                 <p className="text-sm font-bold text-slate-500 mt-2">請選擇要下載的 CSV 資料範圍</p>
               </div>
               <button
-                onClick={() => setShowExportModal(false)}
+                onClick={() => { exportController.current?.abort(); setShowExportModal(false); }}
                 className="p-2 hover:bg-slate-100 transition-colors border-2 border-slate-900 shadow-[2px_2px_0_#0F172A] active:translate-y-0.5 active:shadow-none"
                 aria-label="關閉匯出選單"
               >
@@ -1754,31 +1699,28 @@ export default function Admin() {
               </button>
             </div>
 
-            <div className="mb-5 grid grid-cols-1 gap-3 border-2 border-slate-200 bg-slate-50 p-4 sm:grid-cols-2">
-              <label className="text-sm font-bold text-slate-700">
-                開始日期
-                <input type="date" value={exportStartDate} onChange={(e) => setExportStartDate(e.target.value)} className="mt-1.5 w-full border-2 border-slate-300 bg-white p-2 text-sm focus:border-slate-900 focus:outline-none" />
-              </label>
-              <label className="text-sm font-bold text-slate-700">
-                結束日期
-                <input type="date" value={exportEndDate} onChange={(e) => setExportEndDate(e.target.value)} className="mt-1.5 w-full border-2 border-slate-300 bg-white p-2 text-sm focus:border-slate-900 focus:outline-none" />
-              </label>
-              <div className="sm:col-span-2 flex items-center justify-between gap-3 text-xs font-medium text-slate-500">
-                <span>不填日期即匯出全部資料；結束日期包含當日全天。</span>
-                {(exportStartDate || exportEndDate) && <button type="button" onClick={() => { setExportStartDate(''); setExportEndDate(''); }} className="shrink-0 font-bold text-slate-700 underline underline-offset-2 hover:text-slate-950">清除篩選</button>}
-              </div>
-            </div>
-
+            <p className="mb-5 text-sm text-slate-600">套用畫面上已生效的共用篩選條件；包含所有符合條件的頁面。日期以台北時間計算。</p>
+            <fieldset disabled={exporting} className="mb-4 border-2 border-slate-200 p-4">
+              <legend className="px-2 font-bold">匯出欄位</legend>
+              <div className="mb-3 flex gap-4 text-sm"><button type="button" onClick={() => setExportFields(EXPORT_FIELDS.map(([key]) => key))} className="underline">全選欄位</button><button type="button" onClick={() => setExportFields([])} className="underline">清除欄位</button></div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">{EXPORT_FIELDS.map(([key,label]) => <label key={key} className="flex gap-2 items-center"><input type="checkbox" checked={exportFields.includes(key)} onChange={event => setExportFields(prev => event.target.checked ? [...prev,key] : prev.filter(field => field !== key))} />{label}</label>)}</div>
+              <label className="mt-4 flex items-center gap-2 font-bold"><input type="checkbox" checked={includePersonal} disabled={!exportFields.includes('email')} onChange={event => setIncludePersonal(event.target.checked)} />包含完整 Email（個資）</label>
+              <p className="mt-2 text-xs text-slate-500">Email 預設遮蔽為 ***@***。自訂回答可能含個資，遮蔽 Email 不代表整份資料已去識別化。</p>
+              {includePersonal && exportFields.includes('email') && <p className="mt-2 text-sm text-amber-800">本次檔案將包含完整 Email，請確認下載及分享對象。</p>}
+              {!exportFields.length && <p role="alert" className="mt-2 text-red-700">請至少選擇一個匯出欄位。</p>}
+            </fieldset>
+            {exporting && <p role="status" className="mb-4 font-bold">正在準備匯出，已讀取 {exportProgress} 筆…</p>}
+            {queryError && <p role="alert" className="mb-4 text-red-700">{queryError}</p>}
             <div className="space-y-3">
               {[
-                { id: 'full', title: '完整填寫資料', desc: '只匯出包含序位資訊的填寫資料', count: filterRowsByExportDate(fullDataList).length },
-                { id: 'skip', title: '無序位填寫資料', desc: '只匯出略過或未提供序位區間的資料', count: filterRowsByExportDate(skipDataList).length },
-                { id: 'all', title: '全部資料', desc: '匯出完整填寫與無序位填寫的合併資料', count: filterRowsByExportDate(data).length }
+                { id: 'full', title: '完整填寫資料', desc: '符合篩選且包含序位的資料', count: stats.full },
+                { id: 'skip', title: '無序位填寫資料', desc: '符合篩選且未提供序位的資料', count: stats.skip },
+                { id: 'all', title: '全部資料', desc: '符合篩選的兩類資料合併匯出', count: stats.total }
               ].map(option => (
                 <button
                   key={option.id}
                   onClick={() => exportToCSV(option.id as 'full' | 'skip' | 'all')}
-                  disabled={option.count === 0}
+                  disabled={exporting || statsLoading || option.count === 0 || exportFields.length === 0}
                   className="w-full border-2 border-slate-900 bg-slate-50 p-4 text-left shadow-[3px_3px_0_#0F172A] hover:bg-emerald-50 hover:translate-y-0.5 hover:shadow-none active:translate-y-1 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-slate-50 disabled:hover:translate-y-0 disabled:hover:shadow-[3px_3px_0_#0F172A]"
                 >
                   <div className="flex items-center justify-between gap-4">
