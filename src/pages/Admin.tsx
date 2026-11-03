@@ -1,7 +1,8 @@
+import { getExamYears, formatTaipeiTime, announcementForYear } from '../utils/surveyTime';
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabase';
 import { Link, useBlocker } from 'react-router-dom';
-import { DEFAULT_ANNOUNCEMENT, taipeiInput, toSettingsDraft, settingsPayload, settingsDiff, settingsIssues, type SettingsDraft } from '../utils/adminSettings';
+import { DEFAULT_ANNOUNCEMENT, taipeiInput, taipeiISO, toSettingsDraft, settingsPayload, settingsDiff, settingsIssues, type SettingsDraft } from '../utils/adminSettings';
 import { EXPORT_FIELDS, exportCsvRow, type ExportField } from '../utils/adminExport';
 import { toCsvCell } from '../utils/spreadsheet';
 import { parseSurveyConfig } from '../utils/surveyConfig';
@@ -38,7 +39,8 @@ export default function Admin() {
   const [activeTab, setActiveTab] = useState<'overview' | 'full' | 'skip' | 'settings' | 'backups' | 'logs'>('overview');
 
   // Settings State
-  const [announcementDate, setAnnouncementDate] = useState('2026-06-16T12:00');
+  const [announcementDate, setAnnouncementDate] = useState('');
+  const [announcementPreviewYear, setAnnouncementPreviewYear] = useState(getExamYears()[0]);
   const [announcementContent, setAnnouncementContent] = useState(DEFAULT_ANNOUNCEMENT_CONTENT);
   const [customQuestions, setCustomQuestions] = useState<any[]>([]);
   const [backups, setBackups] = useState<any[]>([]);
@@ -78,6 +80,7 @@ export default function Admin() {
     subject_score_start_time: subjectScoreStartTime, subject_score_end_time: subjectScoreEndTime,
     subject_score_enabled: subjectScoreEnabled, system_start_time: systemStartTime, system_end_time: systemEndTime, system_enabled: systemEnabled,
   };
+  const announcementPreview = announcementForYear(announcementContent, announcementPreviewYear, getExamYears()[0], taipeiISO(announcementDate));
   const changes = baseline ? settingsDiff(baseline, draft) : [];
   if (baseline && configVersion.id === null) changes.unshift({ label: '設定建立', before: '尚未設定', after: '建立表單設定' });
   const dirty = baseline !== null && changes.length > 0;
@@ -982,7 +985,7 @@ export default function Admin() {
                   />
                   {announcementDate && (
                     <div className="flex items-center text-emerald-600 bg-emerald-50 px-4 py-2 border-2 border-emerald-200">
-                      目前設定為：{new Date(announcementDate).toLocaleString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                      目前設定為：{formatTaipeiTime(announcementDate)}
                     </div>
                   )}
                 </div>
@@ -992,6 +995,12 @@ export default function Admin() {
               <div className="mb-6 border-2 border-blue-200 bg-blue-50 p-5">
                 <h4 className="font-bold text-slate-900">序位開放後公告內容</h4>
                 <p className="mt-1 text-sm text-slate-600">公告時間到達後，前台將顯示以下內容與連結。</p>
+                <p className="mt-2 text-xs text-slate-600">標題、說明與按鈕文字可使用 {'{examYear}'} 跟隨學生所選年度；{'{announcementTime}'} 會顯示設定的公告時間。最新年度之前的資料會顯示歷年填寫說明。</p>
+                <div className="mt-3 border border-blue-200 bg-white p-3">
+                  <label className="text-sm font-bold">公告預覽年度 <select aria-label="公告預覽年度" value={announcementPreviewYear} onChange={event=>setAnnouncementPreviewYear(event.target.value)} className="ml-2 border border-slate-300 p-2">{getExamYears().map(year=><option key={year} value={year}>{year} 年度</option>)}</select></label>
+                  <p className="font-bold mt-3">{announcementPreview.title}</p><p className="mt-2 text-sm">{announcementPreview.body}</p>
+                  {announcementPreview.linkLabel && <p className="mt-2 text-sm">按鈕：{announcementPreview.linkLabel}</p>}
+                </div>
                 <div className="mt-4 grid gap-4">
                   <label className="text-sm font-bold text-slate-700">公告標題
                     <input value={announcementContent.title} onChange={(e) => setAnnouncementContent(prev => ({ ...prev, title: e.target.value }))} className="mt-1.5 w-full border-2 border-slate-300 bg-white p-3 font-medium focus:border-slate-900 focus:outline-none" />
@@ -1074,6 +1083,7 @@ export default function Admin() {
                 </div>
               </div>
               
+              <p className="mb-4 text-sm text-slate-500">自訂題目開始與結束時間一律採台北時間（UTC+8），不受學生裝置時區影響。</p>
               <div className="space-y-6">
                 {customQuestions.map((q, idx) => (
                   <div key={q.id} className="relative group">
@@ -1382,15 +1392,15 @@ export default function Admin() {
                     <div className="bg-slate-50 border-2 border-slate-200 p-4">
                       <p className="text-xs font-black text-slate-400 mb-2 uppercase tracking-widest">序位公告時間</p>
                       <p className="font-bold text-slate-900 text-sm">
-                        {announcementDate ? new Date(announcementDate).toLocaleString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '未設定'}
+                        {announcementDate ? formatTaipeiTime(announcementDate) : '未設定'}
                       </p>
                     </div>
                     
                     <div className="bg-slate-50 border-2 border-slate-200 p-4">
                       <p className="text-xs font-black text-slate-400 mb-2 uppercase tracking-widest">系統總開放期間</p>
                       <p className="font-bold text-slate-900 text-sm leading-tight">
-                        <span className="text-slate-500 inline-block w-6">起</span> {systemStartTime ? new Date(systemStartTime).toLocaleString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '不限'}<br/>
-                        <span className="text-slate-500 inline-block w-6 text-xs mt-1">迄</span> {systemEndTime ? new Date(systemEndTime).toLocaleString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '不限'}
+                        <span className="text-slate-500 inline-block w-6">起</span> {systemStartTime ? formatTaipeiTime(systemStartTime) : '不限'}<br/>
+                        <span className="text-slate-500 inline-block w-6 text-xs mt-1">迄</span> {systemEndTime ? formatTaipeiTime(systemEndTime) : '不限'}
                       </p>
                     </div>
                     
@@ -1408,11 +1418,11 @@ export default function Admin() {
                         <div className="flex flex-col sm:flex-row gap-4">
                           <div className="flex-1">
                             <span className="text-slate-400 text-xs font-bold mr-2">START</span>
-                            <span className="font-bold text-slate-900 text-sm">{subjectScoreStartTime ? new Date(subjectScoreStartTime).toLocaleString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '不限'}</span>
+                            <span className="font-bold text-slate-900 text-sm">{subjectScoreStartTime ? formatTaipeiTime(subjectScoreStartTime) : '不限'}</span>
                           </div>
                           <div className="flex-1">
                             <span className="text-slate-400 text-xs font-bold mr-2">END</span>
-                            <span className="font-bold text-slate-900 text-sm">{subjectScoreEndTime ? new Date(subjectScoreEndTime).toLocaleString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '不限'}</span>
+                            <span className="font-bold text-slate-900 text-sm">{subjectScoreEndTime ? formatTaipeiTime(subjectScoreEndTime) : '不限'}</span>
                           </div>
                         </div>
                       )}
@@ -1460,9 +1470,9 @@ export default function Admin() {
                                 <Calendar className="w-4 h-4 mr-2 text-amber-500 flex-shrink-0" />
                                 <div>
                                   <span className="uppercase tracking-wider opacity-75 mr-1">Time Limit:</span>
-                                  {q.startTime && <span>{new Date(q.startTime).toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })} 起</span>}
+                                  {q.startTime && <span>{formatTaipeiTime(q.startTime)} 起</span>}
                                   {q.startTime && q.endTime && <span className="mx-1">~</span>}
-                                  {q.endTime && <span>{new Date(q.endTime).toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })} 止</span>}
+                                  {q.endTime && <span>{formatTaipeiTime(q.endTime)} 止</span>}
                                 </div>
                               </div>
                             )}
@@ -1573,7 +1583,7 @@ export default function Admin() {
                 </div>
                 <div className="bg-white p-4 border-2 border-slate-200 col-span-2">
                   <span className="block text-xs uppercase tracking-wider text-slate-400 mb-1 font-bold">序位區間公告時間</span>
-                  <span className="font-bold text-slate-900">{showBackupPreview.announcement_date ? new Date(showBackupPreview.announcement_date).toLocaleString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '未設定'}</span>
+                  <span className="font-bold text-slate-900">{showBackupPreview.announcement_date ? formatTaipeiTime(showBackupPreview.announcement_date) : '未設定'}</span>
                 </div>
               </div>
             </div>

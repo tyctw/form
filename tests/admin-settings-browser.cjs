@@ -2,7 +2,7 @@
 const {chromium}=require(process.argv[2]||'playwright');
 const assert=require('node:assert/strict'),fs=require('node:fs');
 const base=process.env.APP_URL||'http://127.0.0.1:4175/form/';
-let live={id:1,revision:0,announcement_date:'2026-11-03T04:00:00Z',announcement_content:{title:'初始標題',body:'原說明',linkLabel:'查詢',linkUrl:'https://example.invalid'},custom_questions:[],system_enabled:true,subject_score_enabled:true,system_start_time:null,system_end_time:null,subject_score_start_time:null,subject_score_end_time:null};
+let live={id:1,revision:0,announcement_date:'2026-11-03T04:00:00Z',announcement_content:{title:'初始標題',body:'原說明',linkLabel:'查詢',linkUrl:'https://example.invalid'},custom_questions:[{id:'time-q',type:'text',question:'時間測試題',required:false,startTime:'2026-11-03T10:00:00Z'}],system_enabled:true,subject_score_enabled:true,system_start_time:null,system_end_time:null,subject_score_start_time:null,subject_score_end_time:null};
 const calls=[],errors=[];
 let raceOnPublish=false;
 async function main(){
@@ -53,7 +53,15 @@ async function main(){
     assert.ok((await page.getByLabel('各區樣本數').innerText()).includes('基北區：2 筆'));
     const secondContext=await browser.newContext({viewport:{width:1366,height:1000},timezoneId:'America/Los_Angeles'});await secondContext.route('https://**/*',handler);const second=await secondContext.newPage();pages.push(second);second.setDefaultTimeout(10000);second.on('pageerror',e=>errors.push(e.message));await login(second);
     await button(page,'系統設定與自訂問卷').click();
+    await page.getByLabel('公告標題',{exact:true}).fill('預覽 {examYear}');
+    await page.getByText('預覽 116',{exact:true}).waitFor();
+    await page.getByLabel('公告預覽年度',{exact:true}).selectOption('115');
+    await page.getByText('115 年度資料填寫',{exact:true}).waitFor();
+    await page.getByLabel('公告預覽年度',{exact:true}).selectOption('116');
     await page.getByLabel('公告標題',{exact:true}).fill('第一位更新');
+    await button(page,'表單預覽').click();
+    await page.getByText(/2026\/11\/03\s+10:00 起/).waitFor();
+    await button(page,'關閉預覽').click();
     await page.getByText(/項未儲存變更/).waitFor();
     await button(page,'分析圖表').click();
     await button(page,'系統設定與自訂問卷').click();

@@ -34,12 +34,14 @@ async function main() {
         await page.getByRole('link', { name: '返回首頁', exact: true }).click();
         await page.waitForURL('**/#/');
         await page.getByRole('heading', { name: '會考序位調查問卷' }).waitFor();
+        await page.locator('form').waitFor({ state: 'visible' });
         assert.ok((await page.locator('#root').innerText()).length > 100);
         await page.goBack();
         await page.getByRole('heading', { name: '使用說明', exact: true }).waitFor();
         await page.goForward();
         await page.waitForURL('**/#/');
         await page.getByRole('heading', { name: '會考序位調查問卷' }).waitFor();
+        await page.locator('form').waitFor({ state: 'visible' });
         assert.ok((await page.locator('#root').innerText()).length > 100);
         await page.goBack();
       }
@@ -54,7 +56,8 @@ async function main() {
       await page.getByRole('link', { name: '返回首頁' }).click();
       await page.waitForURL('**/#/');
       await page.getByRole('heading', { name: '會考序位調查問卷' }).waitFor();
-      assert.ok((await page.locator('#root').innerText()).length > 100);
+      await page.locator('form').waitFor({ state: 'visible' });
+        assert.ok((await page.locator('#root').innerText()).length > 100);
     });
     if (!process.env.PRODUCTION_SMOKE) {
       for (const [name, config] of [
@@ -69,7 +72,7 @@ async function main() {
         });
       }
       await scenario('render-error recovery and boundary reset on navigation', validConfig, async page => {
-        await page.route('**/src/pages/Information.tsx', route => route.fulfill({
+        await page.route('**/src/pages/Information.tsx*', route => route.fulfill({
           contentType: 'application/javascript',
           body: "export default function Information(){ throw new Error('fixture render failure'); }",
         }));
@@ -79,11 +82,12 @@ async function main() {
         await page.waitForURL('**/#/');
         await page.getByRole('heading', { name: '頁面暫時無法顯示' }).waitFor({ state: 'hidden' });
         await page.getByRole('heading', { name: '會考序位調查問卷' }).waitFor();
+        await page.locator('form').waitFor({ state: 'visible' });
         assert.ok((await page.locator('#root').innerText()).length > 100);
       });
     }
     await scenario('blocked application bundle keeps a visible recovery action', validConfig, async page => {
-      await page.route(process.env.PRODUCTION_SMOKE ? '**/assets/index-*.js' : '**/src/main.tsx', route => route.abort());
+      await page.route(process.env.PRODUCTION_SMOKE ? '**/assets/index-*.js' : '**/src/main.tsx*', route => route.abort());
       await page.goto(base + '#/');
       await page.locator('#startup-reload').waitFor({ state: 'visible' });
       assert.match(await page.locator('#startup-message').innerText(), /暫時無法載入/);

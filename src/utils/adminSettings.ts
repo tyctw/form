@@ -1,8 +1,5 @@
-export const DEFAULT_ANNOUNCEMENT = {
-  title: '公告：115年度序位區間已開放查詢',
-  body: '請先前往系統查詢您的序位資訊，再回來完整填寫，以獲得更準確的落點分析。',
-  linkLabel: '前往查詢序位區間', linkUrl: 'https://tyctw.github.io/volunteer/',
-};
+import { DEFAULT_ANNOUNCEMENT, normalizeQuestionTime } from './surveyTime.ts';
+export { DEFAULT_ANNOUNCEMENT } from './surveyTime.ts';
 export type SettingsDraft = {
   announcement_date: string;
   announcement_content: typeof DEFAULT_ANNOUNCEMENT;
@@ -23,9 +20,9 @@ export function taipeiISO(value: string): string | null {
 }
 export function toSettingsDraft(raw: Record<string, any> | null): SettingsDraft {
   return {
-    announcement_date: raw ? taipeiInput(raw.announcement_date) : '2026-06-16T12:00',
+    announcement_date: raw ? taipeiInput(raw.announcement_date) : '',
     announcement_content: { ...DEFAULT_ANNOUNCEMENT, ...raw?.announcement_content },
-    custom_questions: (raw?.custom_questions || []).filter((q: any) => q.id !== '__SYSTEM_BACKUPS__'),
+    custom_questions: (raw?.custom_questions || []).filter((q: any) => q.id !== '__SYSTEM_BACKUPS__').map((q: any) => ({ ...q, ...(q.startTime ? {startTime:normalizeQuestionTime(q.startTime)} : {}), ...(q.endTime ? {endTime:normalizeQuestionTime(q.endTime)} : {}) })),
     subject_score_start_time: taipeiInput(raw?.subject_score_start_time),
     subject_score_end_time: taipeiInput(raw?.subject_score_end_time),
     subject_score_enabled: raw ? raw.subject_score_enabled === true : true,

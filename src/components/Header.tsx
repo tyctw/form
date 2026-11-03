@@ -1,3 +1,4 @@
+import { getExamYears } from '../utils/surveyTime';
 import { useState } from 'react';
 import { Menu, X, ExternalLink, Instagram, Share2 } from 'lucide-react';
 
@@ -13,7 +14,7 @@ const ThreadsIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
-export function Header({ onShareClick }: { onShareClick?: () => void }) {
+export function Header({ onShareClick, examYear = getExamYears()[0] }: { onShareClick?: () => void; examYear?: string }) {
   const [isOpen, setIsOpen] = useState(false);
 
   return (
@@ -21,7 +22,7 @@ export function Header({ onShareClick }: { onShareClick?: () => void }) {
       <header className="bg-white/90 backdrop-blur-md text-slate-900 px-4 sm:px-8 py-3 items-center fixed top-0 w-full z-40 border-b-[3px] border-slate-900 flex justify-between flex-none transition-all duration-300">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 geometric-card bg-slate-900 text-white flex items-center justify-center font-extrabold text-base tracking-wider rounded-sm rotate-2 hover:rotate-0 transition-transform">
-            115
+            {examYear}
           </div>
           <div className="font-extrabold text-lg sm:text-xl tracking-widest text-slate-900">
             全國會考分析系統
@@ -63,7 +64,7 @@ export function Header({ onShareClick }: { onShareClick?: () => void }) {
         <div className="p-5 flex justify-between items-center bg-slate-50 border-b-[3px] border-slate-900">
           <div className="flex items-center gap-3">
              <div className="w-9 h-9 bg-slate-900 text-white flex items-center justify-center font-extrabold text-sm rounded-sm">
-                115
+                {examYear}
              </div>
              <h2 className="font-extrabold text-lg tracking-widest text-slate-900 uppercase">功能選單</h2>
           </div>

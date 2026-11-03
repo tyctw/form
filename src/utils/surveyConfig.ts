@@ -1,3 +1,4 @@
+import { normalizeQuestionTime } from './surveyTime.ts';
 import type { CustomQuestion } from '../types';
 
 function record(value: unknown): value is Record<string, unknown> {
@@ -49,13 +50,15 @@ export function parseSurveyConfig(value: unknown, depth = 0): Record<string, any
       || !question.options.every(option => typeof option === 'string'))) {
       throw new Error('自訂題目選項格式錯誤');
     }
+    const normalized = { ...question };
     for (const key of ['startTime', 'endTime']) {
       if (question[key] != null && question[key] !== ''
         && (typeof question[key] !== 'string' || !Number.isFinite(Date.parse(question[key])))) {
         throw new Error('自訂題目日期格式錯誤');
       }
+      if (typeof question[key] === 'string' && question[key]) normalized[key] = normalizeQuestionTime(question[key]);
     }
-    return { ...question, required: question.required ?? false } as unknown as CustomQuestion;
+    return { ...normalized, required: question.required ?? false } as unknown as CustomQuestion;
   });
   return result;
 }
